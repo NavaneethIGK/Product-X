@@ -313,19 +313,30 @@ def get_summary_stats() -> QueryResult:
         summary="Supply chain overview"
     )
 
-def get_generative_insights(limit=10):
+def get_generative_insights(limit=10, **kwargs) -> QueryResult:
     """Generate actionable insights and recommendations based on data analysis"""
     df = load_csv()
+    if df.empty:
+        return QueryResult(
+            query_type='generative_insights',
+            result={},
+            data=[],
+            summary="No data available"
+        )
+    
+    df['expected_arrival'] = pd.to_datetime(df['expected_arrival'], errors='coerce')
+    df['arrived_at'] = pd.to_datetime(df['arrived_at'], errors='coerce')
     
     # Filter to arrived shipments
-    arrived = df[df['STATUS'] == 'ARRIVED'].copy()
+    arrived = df[df['status'] == 'ARRIVED'].copy()
     
     if len(arrived) == 0:
-        return {
-            "query_type": "generative_insights",
-            "insights": "No arrived shipments to analyze",
-            "recommendations": []
-        }
+        return QueryResult(
+            query_type='generative_insights',
+            result={},
+            data=[],
+            summary="No arrived shipments to analyze"
+        )
     
     # Fix: Use .loc to avoid SettingWithCopyWarning
     arrived.loc[:, 'is_delayed'] = arrived['arrived_at'] > arrived['expected_arrival']
@@ -335,23 +346,12 @@ def get_generative_insights(limit=10):
     delayed_count = arrived['is_delayed'].sum()
     delay_rate = (delayed_count / total_arrived * 100) if total_arrived > 0 else 0
     
-    # Fix: Check if 'ROUTE' column exists (might be uppercase)
-    route_col = 'ROUTE' if 'ROUTE' in arrived.columns else 'route'
-    sku_col = 'SKU' if 'SKU' in arrived.columns else 'sku'
+    # Check which column names exist
+    route_col = 'route' if 'route' in arrived.columns else None
+    sku_col = 'sku' if 'sku' in arrived.columns else None
     
-    # Analyze by route
-    route_delays = arrived.groupby(route_col)['is_delayed'].apply(
-        lambda x: (x.sum() / len(x) * 100)
-    ).reset_index().sort_values('is_delayed', ascending=False).head(5)
-    
-    # Analyze by SKU
-    sku_delays = arrived.groupby(sku_col)['is_delayed'].apply(
-        lambda x: (x.sum() / len(x) * 100)
-    ).reset_index().sort_values('is_delayed', ascending=False).head(5)
-    
-    # Build insights
-    insights = f"""
-### 📊 Supply Chain Performance Analysis
+    # Build insights summary
+    summary = f"""## 📊 Supply Chain Performance Analysis
 
 **Current State:**
 - On-Time Delivery Rate: {100 - delay_rate:.2f}%
@@ -359,37 +359,28 @@ def get_generative_insights(limit=10):
 - Total Arrived Shipments: {total_arrived:,}
 - Delayed Shipments: {delayed_count:,}
 
-**Top Problem Routes (by delay rate):**
-"""
+**Key Issues Identified:**
+- {delayed_count:,} shipments exceeded their expected delivery date
+- Delay rate of {delay_rate:.2f}% indicates potential carrier/logistics issues
+
+**Recommendations:**
+1. 🔴 HIGH PRIORITY: Investigate carrier performance on high-delay routes
+2. 📦 Review SKU handling procedures - some products may have quality/packaging issues
+3. 🛣️ Consider alternative shipping routes for consistently delayed corridors
+4. ⏰ Implement real-time tracking and alerts for at-risk shipments
+5. 📊 Set up predictive model to forecast delays before they happen"""
     
-    for idx, row in route_delays.iterrows():
-        insights += f"\n- **{row[route_col]}**: {row['is_delayed']:.1f}% delay rate"
-    
-    insights += "\n\n**Top Problem SKUs (by delay rate):**\n"
-    
-    for idx, row in sku_delays.iterrows():
-        insights += f"\n- **{row[sku_col]}**: {row['is_delayed']:.1f}% delay rate"
-    
-    # Generate recommendations
-    recommendations = [
-        "🔴 HIGH PRIORITY: Focus on routes with >50% delay rate - investigate carrier performance and logistics",
-        "📦 Investigate SKUs with high delay rates - check packaging/handling issues",
-        "🛣️ Optimize routing: Consider alternative routes for problematic corridors",
-        "⏰ Implement real-time tracking for high-risk shipments",
-        "📊 Set up predictive alerts for shipments likely to be delayed"
-    ]
-    
-    return {
-        "query_type": "generative_insights",
-        "insights": insights,
-        "recommendations": recommendations,
-        "metrics": {
-            "on_time_rate": 100 - delay_rate,
-            "delay_rate": delay_rate,
-            "total_shipments": total_arrived,
-            "delayed_count": delayed_count
-        }
-    }
+    return QueryResult(
+        query_type='generative_insights',
+        result={
+            'on_time_rate': round(100 - delay_rate, 2),
+            'delay_rate': round(delay_rate, 2),
+            'total_shipments': total_arrived,
+            'delayed_count': delayed_count
+        },
+        data=[],
+        summary=summary
+    )
 
 # Query dispatcher
 QUERY_HANDLERS = {
