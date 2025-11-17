@@ -1,0 +1,660 @@
+{
+  "global_metrics": {
+    "total_shipments": 1000000,
+    "on_time_percentage": 57.18,
+    "delay_percentage": 42.82,
+    "average_delay_days": 6.63,
+    "maximum_delay_days": 17,
+    "median_transit_days": 12
+  },
+  "eta_model": {
+    "CN-SHZ->CN-SHZ": {
+      "baseline_days": 11.52,
+      "std_dev": 5.18,
+      "samples": 11017,
+      "delay_rate": 61.55
+    },
+    "CN-SHZ->DE-FRA": {
+      "baseline_days": 11.47,
+      "std_dev": 5.21,
+      "samples": 10904,
+      "delay_rate": 61.17
+    },
+    "CN-SHZ->IN-DEL": {
+      "baseline_days": 11.46,
+      "std_dev": 5.19,
+      "samples": 10855,
+      "delay_rate": 60.53
+    },
+    "CN-SHZ->IN-MUM": {
+      "baseline_days": 11.5,
+      "std_dev": 5.17,
+      "samples": 10937,
+      "delay_rate": 61.54
+    },
+    "CN-SHZ->SG-SIN": {
+      "baseline_days": 11.52,
+      "std_dev": 5.17,
+      "samples": 10976,
+      "delay_rate": 61.21
+    },
+    "CN-SHZ->TH-BKK": {
+      "baseline_days": 11.47,
+      "std_dev": 5.19,
+      "samples": 11118,
+      "delay_rate": 61.32
+    },
+    "CN-SHZ->UK-LON": {
+      "baseline_days": 11.4,
+      "std_dev": 5.16,
+      "samples": 10838,
+      "delay_rate": 60.43
+    },
+    "CN-SHZ->US-LAX": {
+      "baseline_days": 11.5,
+      "std_dev": 5.19,
+      "samples": 11114,
+      "delay_rate": 61.14
+    },
+    "DE-FRA->CN-SHZ": {
+      "baseline_days": 11.52,
+      "std_dev": 5.19,
+      "samples": 10874,
+      "delay_rate": 61.1
+    },
+    "DE-FRA->DE-FRA": {
+      "baseline_days": 11.58,
+      "std_dev": 5.16,
+      "samples": 11048,
+      "delay_rate": 61.18
+    },
+    "DE-FRA->IN-DEL": {
+      "baseline_days": 11.54,
+      "std_dev": 5.21,
+      "samples": 11003,
+      "delay_rate": 61.61
+    },
+    "DE-FRA->IN-MUM": {
+      "baseline_days": 11.56,
+      "std_dev": 5.17,
+      "samples": 10791,
+      "delay_rate": 61.15
+    },
+    "DE-FRA->SG-SIN": {
+      "baseline_days": 11.5,
+      "std_dev": 5.23,
+      "samples": 10769,
+      "delay_rate": 61.4
+    },
+    "DE-FRA->TH-BKK": {
+      "baseline_days": 11.49,
+      "std_dev": 5.18,
+      "samples": 10927,
+      "delay_rate": 61.2
+    },
+    "DE-FRA->UK-LON": {
+      "baseline_days": 11.56,
+      "std_dev": 5.17,
+      "samples": 11185,
+      "delay_rate": 61.96
+    },
+    "DE-FRA->US-LAX": {
+      "baseline_days": 11.51,
+      "std_dev": 5.19,
+      "samples": 10966,
+      "delay_rate": 61.3
+    },
+    "IN-DEL->CN-SHZ": {
+      "baseline_days": 11.5,
+      "std_dev": 5.2,
+      "samples": 11029,
+      "delay_rate": 60.52
+    },
+    "IN-DEL->DE-FRA": {
+      "baseline_days": 11.54,
+      "std_dev": 5.2,
+      "samples": 10944,
+      "delay_rate": 61.38
+    },
+    "IN-DEL->IN-DEL": {
+      "baseline_days": 11.63,
+      "std_dev": 5.17,
+      "samples": 10921,
+      "delay_rate": 62.6
+    },
+    "IN-DEL->IN-MUM": {
+      "baseline_days": 11.5,
+      "std_dev": 5.2,
+      "samples": 10823,
+      "delay_rate": 61.11
+    },
+    "IN-DEL->SG-SIN": {
+      "baseline_days": 11.52,
+      "std_dev": 5.2,
+      "samples": 10741,
+      "delay_rate": 60.95
+    },
+    "IN-DEL->TH-BKK": {
+      "baseline_days": 11.55,
+      "std_dev": 5.15,
+      "samples": 10817,
+      "delay_rate": 60.55
+    },
+    "IN-DEL->UK-LON": {
+      "baseline_days": 11.55,
+      "std_dev": 5.19,
+      "samples": 10994,
+      "delay_rate": 60.99
+    },
+    "IN-DEL->US-LAX": {
+      "baseline_days": 11.54,
+      "std_dev": 5.2,
+      "samples": 10953,
+      "delay_rate": 61.08
+    },
+    "IN-MUM->CN-SHZ": {
+      "baseline_days": 11.47,
+      "std_dev": 5.18,
+      "samples": 11094,
+      "delay_rate": 60.83
+    },
+    "IN-MUM->DE-FRA": {
+      "baseline_days": 11.54,
+      "std_dev": 5.2,
+      "samples": 11107,
+      "delay_rate": 61.54
+    },
+    "IN-MUM->IN-DEL": {
+      "baseline_days": 11.52,
+      "std_dev": 5.17,
+      "samples": 10989,
+      "delay_rate": 61.42
+    },
+    "IN-MUM->IN-MUM": {
+      "baseline_days": 11.59,
+      "std_dev": 5.19,
+      "samples": 11048,
+      "delay_rate": 61.51
+    },
+    "IN-MUM->SG-SIN": {
+      "baseline_days": 11.51,
+      "std_dev": 5.21,
+      "samples": 10942,
+      "delay_rate": 60.86
+    },
+    "IN-MUM->TH-BKK": {
+      "baseline_days": 11.45,
+      "std_dev": 5.19,
+      "samples": 10889,
+      "delay_rate": 60.8
+    },
+    "IN-MUM->UK-LON": {
+      "baseline_days": 11.54,
+      "std_dev": 5.2,
+      "samples": 10908,
+      "delay_rate": 61.23
+    },
+    "IN-MUM->US-LAX": {
+      "baseline_days": 11.53,
+      "std_dev": 5.19,
+      "samples": 10827,
+      "delay_rate": 61.3
+    },
+    "SG-SIN->CN-SHZ": {
+      "baseline_days": 11.6,
+      "std_dev": 5.18,
+      "samples": 10955,
+      "delay_rate": 61.83
+    },
+    "SG-SIN->DE-FRA": {
+      "baseline_days": 11.45,
+      "std_dev": 5.22,
+      "samples": 10996,
+      "delay_rate": 60.99
+    },
+    "SG-SIN->IN-DEL": {
+      "baseline_days": 11.42,
+      "std_dev": 5.17,
+      "samples": 10827,
+      "delay_rate": 60.53
+    },
+    "SG-SIN->IN-MUM": {
+      "baseline_days": 11.48,
+      "std_dev": 5.18,
+      "samples": 10864,
+      "delay_rate": 61.28
+    },
+    "SG-SIN->SG-SIN": {
+      "baseline_days": 11.45,
+      "std_dev": 5.17,
+      "samples": 10996,
+      "delay_rate": 61.23
+    },
+    "SG-SIN->TH-BKK": {
+      "baseline_days": 11.49,
+      "std_dev": 5.19,
+      "samples": 10902,
+      "delay_rate": 61.36
+    },
+    "SG-SIN->UK-LON": {
+      "baseline_days": 11.55,
+      "std_dev": 5.18,
+      "samples": 10876,
+      "delay_rate": 61.54
+    },
+    "SG-SIN->US-LAX": {
+      "baseline_days": 11.51,
+      "std_dev": 5.18,
+      "samples": 10911,
+      "delay_rate": 60.69
+    },
+    "TH-BKK->CN-SHZ": {
+      "baseline_days": 11.49,
+      "std_dev": 5.19,
+      "samples": 10886,
+      "delay_rate": 61.47
+    },
+    "TH-BKK->DE-FRA": {
+      "baseline_days": 11.43,
+      "std_dev": 5.19,
+      "samples": 10899,
+      "delay_rate": 61.61
+    },
+    "TH-BKK->IN-DEL": {
+      "baseline_days": 11.47,
+      "std_dev": 5.22,
+      "samples": 10869,
+      "delay_rate": 60.84
+    },
+    "TH-BKK->IN-MUM": {
+      "baseline_days": 11.45,
+      "std_dev": 5.24,
+      "samples": 10879,
+      "delay_rate": 60.71
+    },
+    "TH-BKK->SG-SIN": {
+      "baseline_days": 11.56,
+      "std_dev": 5.22,
+      "samples": 10974,
+      "delay_rate": 61.52
+    },
+    "TH-BKK->TH-BKK": {
+      "baseline_days": 11.47,
+      "std_dev": 5.19,
+      "samples": 11158,
+      "delay_rate": 60.8
+    },
+    "TH-BKK->UK-LON": {
+      "baseline_days": 11.51,
+      "std_dev": 5.16,
+      "samples": 11085,
+      "delay_rate": 61.33
+    },
+    "TH-BKK->US-LAX": {
+      "baseline_days": 11.55,
+      "std_dev": 5.19,
+      "samples": 10880,
+      "delay_rate": 61.08
+    },
+    "UK-LON->CN-SHZ": {
+      "baseline_days": 11.54,
+      "std_dev": 5.15,
+      "samples": 10884,
+      "delay_rate": 61.48
+    },
+    "UK-LON->DE-FRA": {
+      "baseline_days": 11.49,
+      "std_dev": 5.2,
+      "samples": 10930,
+      "delay_rate": 60.56
+    },
+    "UK-LON->IN-DEL": {
+      "baseline_days": 11.53,
+      "std_dev": 5.19,
+      "samples": 10809,
+      "delay_rate": 61.5
+    },
+    "UK-LON->IN-MUM": {
+      "baseline_days": 11.54,
+      "std_dev": 5.18,
+      "samples": 10817,
+      "delay_rate": 61.16
+    },
+    "UK-LON->SG-SIN": {
+      "baseline_days": 11.49,
+      "std_dev": 5.15,
+      "samples": 10920,
+      "delay_rate": 61.0
+    },
+    "UK-LON->TH-BKK": {
+      "baseline_days": 11.55,
+      "std_dev": 5.2,
+      "samples": 10973,
+      "delay_rate": 61.93
+    },
+    "UK-LON->UK-LON": {
+      "baseline_days": 11.44,
+      "std_dev": 5.17,
+      "samples": 10819,
+      "delay_rate": 60.18
+    },
+    "UK-LON->US-LAX": {
+      "baseline_days": 11.45,
+      "std_dev": 5.19,
+      "samples": 10822,
+      "delay_rate": 61.24
+    },
+    "US-LAX->CN-SHZ": {
+      "baseline_days": 11.47,
+      "std_dev": 5.17,
+      "samples": 10869,
+      "delay_rate": 61.01
+    },
+    "US-LAX->DE-FRA": {
+      "baseline_days": 11.48,
+      "std_dev": 5.19,
+      "samples": 10991,
+      "delay_rate": 61.06
+    },
+    "US-LAX->IN-DEL": {
+      "baseline_days": 11.59,
+      "std_dev": 5.19,
+      "samples": 11015,
+      "delay_rate": 61.53
+    },
+    "US-LAX->IN-MUM": {
+      "baseline_days": 11.47,
+      "std_dev": 5.18,
+      "samples": 10860,
+      "delay_rate": 60.87
+    },
+    "US-LAX->SG-SIN": {
+      "baseline_days": 11.51,
+      "std_dev": 5.2,
+      "samples": 10928,
+      "delay_rate": 60.62
+    },
+    "US-LAX->TH-BKK": {
+      "baseline_days": 11.51,
+      "std_dev": 5.19,
+      "samples": 11052,
+      "delay_rate": 60.82
+    },
+    "US-LAX->UK-LON": {
+      "baseline_days": 11.58,
+      "std_dev": 5.15,
+      "samples": 11023,
+      "delay_rate": 61.55
+    },
+    "US-LAX->US-LAX": {
+      "baseline_days": 11.57,
+      "std_dev": 5.21,
+      "samples": 10909,
+      "delay_rate": 61.89
+    }
+  },
+  "route_statistics": {
+    "IN-DEL->IN-DEL": {
+      "expected_days": 8.93,
+      "actual_days": 11.63,
+      "avg_delay_days": 2.7,
+      "delayed_count": 6837,
+      "total_count": 10921,
+      "delay_rate": 62.6
+    },
+    "DE-FRA->UK-LON": {
+      "expected_days": 8.97,
+      "actual_days": 11.56,
+      "avg_delay_days": 2.59,
+      "delayed_count": 6930,
+      "total_count": 11185,
+      "delay_rate": 61.96
+    },
+    "UK-LON->TH-BKK": {
+      "expected_days": 8.97,
+      "actual_days": 11.55,
+      "avg_delay_days": 2.58,
+      "delayed_count": 6796,
+      "total_count": 10973,
+      "delay_rate": 61.93
+    },
+    "US-LAX->US-LAX": {
+      "expected_days": 9.0,
+      "actual_days": 11.57,
+      "avg_delay_days": 2.57,
+      "delayed_count": 6752,
+      "total_count": 10909,
+      "delay_rate": 61.89
+    },
+    "SG-SIN->CN-SHZ": {
+      "expected_days": 8.98,
+      "actual_days": 11.6,
+      "avg_delay_days": 2.62,
+      "delayed_count": 6774,
+      "total_count": 10955,
+      "delay_rate": 61.83
+    },
+    "TH-BKK->DE-FRA": {
+      "expected_days": 8.92,
+      "actual_days": 11.43,
+      "avg_delay_days": 2.51,
+      "delayed_count": 6715,
+      "total_count": 10899,
+      "delay_rate": 61.61
+    },
+    "DE-FRA->IN-DEL": {
+      "expected_days": 8.99,
+      "actual_days": 11.54,
+      "avg_delay_days": 2.55,
+      "delayed_count": 6779,
+      "total_count": 11003,
+      "delay_rate": 61.61
+    },
+    "CN-SHZ->CN-SHZ": {
+      "expected_days": 8.98,
+      "actual_days": 11.52,
+      "avg_delay_days": 2.54,
+      "delayed_count": 6781,
+      "total_count": 11017,
+      "delay_rate": 61.55
+    },
+    "US-LAX->UK-LON": {
+      "expected_days": 9.01,
+      "actual_days": 11.58,
+      "avg_delay_days": 2.57,
+      "delayed_count": 6785,
+      "total_count": 11023,
+      "delay_rate": 61.55
+    },
+    "IN-MUM->DE-FRA": {
+      "expected_days": 8.96,
+      "actual_days": 11.54,
+      "avg_delay_days": 2.58,
+      "delayed_count": 6835,
+      "total_count": 11107,
+      "delay_rate": 61.54
+    },
+    "SG-SIN->UK-LON": {
+      "expected_days": 9.01,
+      "actual_days": 11.55,
+      "avg_delay_days": 2.54,
+      "delayed_count": 6693,
+      "total_count": 10876,
+      "delay_rate": 61.54
+    },
+    "CN-SHZ->IN-MUM": {
+      "expected_days": 8.99,
+      "actual_days": 11.5,
+      "avg_delay_days": 2.51,
+      "delayed_count": 6731,
+      "total_count": 10937,
+      "delay_rate": 61.54
+    },
+    "US-LAX->IN-DEL": {
+      "expected_days": 9.05,
+      "actual_days": 11.59,
+      "avg_delay_days": 2.54,
+      "delayed_count": 6778,
+      "total_count": 11015,
+      "delay_rate": 61.53
+    },
+    "TH-BKK->SG-SIN": {
+      "expected_days": 9.05,
+      "actual_days": 11.56,
+      "avg_delay_days": 2.51,
+      "delayed_count": 6751,
+      "total_count": 10974,
+      "delay_rate": 61.52
+    },
+    "IN-MUM->IN-MUM": {
+      "expected_days": 9.02,
+      "actual_days": 11.59,
+      "avg_delay_days": 2.57,
+      "delayed_count": 6796,
+      "total_count": 11048,
+      "delay_rate": 61.51
+    },
+    "UK-LON->IN-DEL": {
+      "expected_days": 8.97,
+      "actual_days": 11.53,
+      "avg_delay_days": 2.56,
+      "delayed_count": 6647,
+      "total_count": 10809,
+      "delay_rate": 61.5
+    },
+    "UK-LON->CN-SHZ": {
+      "expected_days": 8.94,
+      "actual_days": 11.54,
+      "avg_delay_days": 2.6,
+      "delayed_count": 6692,
+      "total_count": 10884,
+      "delay_rate": 61.48
+    },
+    "TH-BKK->CN-SHZ": {
+      "expected_days": 9.02,
+      "actual_days": 11.49,
+      "avg_delay_days": 2.47,
+      "delayed_count": 6692,
+      "total_count": 10886,
+      "delay_rate": 61.47
+    },
+    "IN-MUM->IN-DEL": {
+      "expected_days": 8.97,
+      "actual_days": 11.52,
+      "avg_delay_days": 2.54,
+      "delayed_count": 6749,
+      "total_count": 10989,
+      "delay_rate": 61.42
+    },
+    "DE-FRA->SG-SIN": {
+      "expected_days": 8.98,
+      "actual_days": 11.5,
+      "avg_delay_days": 2.53,
+      "delayed_count": 6612,
+      "total_count": 10769,
+      "delay_rate": 61.4
+    }
+  },
+  "sku_delays": {
+    "SKU-0481": {
+      "avg_delay": 2.92,
+      "delay_percentage": 65.7,
+      "avg_quantity": 256.37
+    },
+    "SKU-0076": {
+      "avg_delay": 2.98,
+      "delay_percentage": 64.65,
+      "avg_quantity": 247.66
+    },
+    "SKU-0029": {
+      "avg_delay": 2.98,
+      "delay_percentage": 64.6,
+      "avg_quantity": 250.47
+    },
+    "SKU-0357": {
+      "avg_delay": 2.91,
+      "delay_percentage": 64.56,
+      "avg_quantity": 253.74
+    },
+    "SKU-0168": {
+      "avg_delay": 2.77,
+      "delay_percentage": 64.28,
+      "avg_quantity": 251.59
+    },
+    "SKU-0003": {
+      "avg_delay": 2.8,
+      "delay_percentage": 64.24,
+      "avg_quantity": 250.24
+    },
+    "SKU-0392": {
+      "avg_delay": 2.87,
+      "delay_percentage": 64.19,
+      "avg_quantity": 244.74
+    },
+    "SKU-0486": {
+      "avg_delay": 2.75,
+      "delay_percentage": 64.16,
+      "avg_quantity": 253.59
+    },
+    "SKU-0104": {
+      "avg_delay": 2.79,
+      "delay_percentage": 64.15,
+      "avg_quantity": 249.52
+    },
+    "SKU-0226": {
+      "avg_delay": 2.64,
+      "delay_percentage": 64.07,
+      "avg_quantity": 252.04
+    },
+    "SKU-0484": {
+      "avg_delay": 2.8,
+      "delay_percentage": 64.02,
+      "avg_quantity": 253.97
+    },
+    "SKU-0386": {
+      "avg_delay": 2.7,
+      "delay_percentage": 63.78,
+      "avg_quantity": 250.55
+    },
+    "SKU-0435": {
+      "avg_delay": 2.76,
+      "delay_percentage": 63.77,
+      "avg_quantity": 255.44
+    },
+    "SKU-0248": {
+      "avg_delay": 2.69,
+      "delay_percentage": 63.76,
+      "avg_quantity": 246.27
+    },
+    "SKU-0331": {
+      "avg_delay": 2.84,
+      "delay_percentage": 63.73,
+      "avg_quantity": 250.95
+    },
+    "SKU-0059": {
+      "avg_delay": 2.76,
+      "delay_percentage": 63.71,
+      "avg_quantity": 248.8
+    },
+    "SKU-0192": {
+      "avg_delay": 2.7,
+      "delay_percentage": 63.69,
+      "avg_quantity": 252.27
+    },
+    "SKU-0409": {
+      "avg_delay": 2.71,
+      "delay_percentage": 63.64,
+      "avg_quantity": 251.09
+    },
+    "SKU-0189": {
+      "avg_delay": 2.73,
+      "delay_percentage": 63.61,
+      "avg_quantity": 246.48
+    },
+    "SKU-0381": {
+      "avg_delay": 2.81,
+      "delay_percentage": 63.55,
+      "avg_quantity": 252.45
+    }
+  }
+}

@@ -1,0 +1,19 @@
+﻿shipment_data_1M.csv
+# Ignore local virtual environment
+.venv/
+venv/
+
+# Ignore Qodo folder
+.qodo/
+
+# Ignore dataset
+shipment_data_1M.csv
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# VS Code settings (optional)
+.vscode/
