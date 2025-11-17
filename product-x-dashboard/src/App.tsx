@@ -8,11 +8,11 @@ import AICopilot from './pages/AICopilot'
 
 export default function App() {
   return (
-    <Box className="min-h-screen flex">
+    <Box className="min-h-screen flex" sx={{ bgcolor: '#f8f9fa' }}>
       <Sidebar />
-      <Box className="flex-1">
+      <Box className="flex-1" sx={{ display: 'flex', flexDirection: 'column' }}>
         <Topbar />
-        <Box component="main" className="p-6">
+        <Box component="main" sx={{ flex: 1, p: 0 }}>
           <Routes>
             <Route path="/" element={<PredictionsAnalytics />} />
             <Route path="/predictions" element={<PredictionsAnalytics />} />

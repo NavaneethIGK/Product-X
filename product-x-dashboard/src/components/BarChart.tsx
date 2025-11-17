@@ -28,8 +28,8 @@ type Props = {
 
 export default function BarChart({ title, labels, datasets, height = 300 }: Props) {
   return (
-    <Paper sx={{ p: 3 }} elevation={1}>
-      <Typography variant="subtitle1" fontWeight={600} mb={2}>
+    <Box sx={{ p: 3 }}>
+      <Typography variant="subtitle1" fontWeight={700} mb={3} sx={{ color: '#333' }}>
         {title}
       </Typography>
       <Box sx={{ height }}>
@@ -38,10 +38,46 @@ export default function BarChart({ title, labels, datasets, height = 300 }: Prop
           options={{
             responsive: true,
             maintainAspectRatio: false,
-            plugins: { legend: { display: true } }
+            plugins: { 
+              legend: { 
+                display: true,
+                labels: {
+                  padding: 15,
+                  font: { size: 12, weight: 500 },
+                  usePointStyle: true
+                }
+              },
+              tooltip: {
+                backgroundColor: 'rgba(0,0,0,0.8)',
+                padding: 12,
+                cornerRadius: 6,
+                titleFont: { size: 13, weight: 'bold' },
+                bodyFont: { size: 12 }
+              }
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                grid: {
+                  color: 'rgba(0,0,0,0.05)',
+                  drawBorder: false
+                },
+                ticks: {
+                  font: { size: 11 },
+                  color: '#666'
+                }
+              },
+              x: {
+                grid: { display: false },
+                ticks: {
+                  font: { size: 11 },
+                  color: '#666'
+                }
+              }
+            }
           }}
         />
       </Box>
-    </Paper>
+    </Box>
   )
 }
