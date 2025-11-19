@@ -20,13 +20,16 @@ app.add_middleware(
 )
 
 # Load models
-MODELS_PATH = r'C:\Projects\Prototypes\Product X\product-x-dashboard\public\models.json'
+# Path relative to script location - works on both Windows and Linux
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+MODELS_PATH = os.path.join(SCRIPT_DIR, 'product-x-dashboard', 'public', 'models.json')
 
 def load_models():
     try:
         with open(MODELS_PATH, 'r') as f:
             return json.load(f)
-    except:
+    except Exception as e:
+        print(f"[WARNING] Could not load models from {MODELS_PATH}: {e}")
         return None
 
 models = load_models()

@@ -19,20 +19,36 @@ type Metrics = {
 }
 
 export default function AICopilot() {
+  // Determine backend URL based on environment
+  // If running on Ubuntu server (e.g., 103.174.10.207:5000), backend is on same host
+  // In dev, backend is localhost:8000
+  const getBackendUrl = () => {
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    if (isLocalhost) {
+      return 'http://localhost:8000'
+    }
+    // On remote server, use same host but different port (or path via proxy)
+    // Option 1: Backend on same host, different port
+    return `http://${window.location.hostname}:8000`
+    // Option 2: If using reverse proxy on same port, use /api
+    // return '/api'
+  }
+  
+  const backendUrl = getBackendUrl()
   const [metrics, setMetrics] = useState<Metrics | null>(null)
   const [backendStatus, setBackendStatus] = useState<'checking' | 'online' | 'offline'>('checking')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     checkBackendAndLoadModels()
-  }, [])
+  }, [backendUrl])
 
   const checkBackendAndLoadModels = async () => {
     try {
       setLoading(true)
 
       // Check backend health
-      const healthRes = await fetch('http://localhost:8000/health')
+      const healthRes = await fetch(`${backendUrl}/health`)
       if (healthRes.ok) {
         setBackendStatus('online')
       } else {
@@ -188,7 +204,7 @@ export default function AICopilot() {
             </Paper>
           ) : (
             <Paper elevation={3} sx={{ borderRadius: 2, overflow: 'hidden', width: '100%', p: 1.5 }}>
-              <AICopilotChat apiUrl="http://localhost:8000" height={520} />
+              <AICopilotChat apiUrl={backendUrl} height={520} />
             </Paper>
           )}
         </Grid>
