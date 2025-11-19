@@ -1,12 +1,12 @@
 module.exports = {
   apps: [
     {
-      name: "product-x-dashboard",
+      name: "dashboard",
       script: "npm",
-      args: "run preview -- --host 0.0.0.0 --port 5000",
-      cwd: "/home/ubuntu/Product X/product-x-dashboard",
+      args: "run dev",
+      cwd: "/home/ubuntu/Product\\ X/product-x-dashboard",
       env: {
-        NODE_ENV: "production"
+        NODE_ENV: "development"
       },
       error_file: "./logs/err.log",
       out_file: "./logs/out.log",
