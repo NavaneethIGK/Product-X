@@ -2,8 +2,7 @@ module.exports = {
   apps: [
     {
       name: "copilot-backend",
-      script: "/usr/bin/python3",
-      args: "copilot_backend.py",
+      script: "/home/ubuntu/Product-X/run_backend.sh",
       cwd: "/home/ubuntu/Product-X",
       env: {
         PYTHONUNBUFFERED: 1
