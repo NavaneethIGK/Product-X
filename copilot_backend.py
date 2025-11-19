@@ -5,7 +5,7 @@ from typing import Optional, Dict, Any
 import json
 import os
 from datetime import datetime
-from intent_detector import detect_intent, format_intent_for_summary
+from intent_detector import detect_intent, format_intent_for_summary, QueryIntent
 from query_engine import execute_query, QueryResult
 
 app = FastAPI(title="Supply Chain AI Copilot", version="1.0.0")
@@ -140,6 +140,11 @@ async def chat(request: ChatRequest):
     try:
         # Step 1: Detect intent from natural language query
         intent = detect_intent(user_query)
+        
+        # Safety check - ensure intent is not None
+        if intent is None:
+            intent = QueryIntent(query_type='summary_stats', filters={}, confidence=0.5)
+        
         print(f"🔍 Detected intent: {intent.query_type} (confidence: {intent.confidence})")
         
         # Step 2: Execute structured query based on intent

@@ -466,6 +466,39 @@ def get_generative_insights(limit: int = 10, **kwargs) -> QueryResult:
             summary=f"Error: {str(e)}"
         )
 
+def get_training_mode(limit: int = 10, **kwargs) -> QueryResult:
+    """Handle queries in training mode - show we're working on it"""
+    return QueryResult(
+        query_type='training_mode',
+        result={},
+        data=[],
+        summary="""🚀 **Advanced Query in Training Mode**
+
+We're actively enhancing our AI to understand this query better! Our model is being trained on similar questions to provide more accurate results.
+
+**What we currently support:**
+• ✅ SKU analysis (count, delays, orders per SKU)
+• ✅ Route performance (delays, top routes)
+• ✅ Shipment status (delayed, in transit, arrived)
+• ✅ Location analysis (destinations, sources)
+• ✅ Supply chain overview & metrics
+
+**Coming Soon:**
+• 📚 Advanced natural language understanding
+• 🔮 Predictive analytics for ETAs
+• 🎯 Custom filters and drilling down
+• 📊 Time-series forecasting
+• 🤖 Generative insights & recommendations
+
+**Try asking:**
+- "Which routes have most delays?"
+- "Show problematic SKUs"
+- "Orders by destination"
+- "How many SKUs do we have?"
+- "Total shipments"
+"""
+    )
+
 # Query dispatcher
 QUERY_HANDLERS = {
     'sku_count': get_sku_count,
@@ -477,7 +510,8 @@ QUERY_HANDLERS = {
     'summary_stats': get_summary_stats,
     'orders_by_destination': get_orders_by_destination,
     'orders_by_source': get_orders_by_source,
-    'generative_insights': get_generative_insights
+    'generative_insights': get_generative_insights,
+    'training_mode': get_training_mode
 }
 
 def execute_query(query_type: str, **kwargs) -> QueryResult:
