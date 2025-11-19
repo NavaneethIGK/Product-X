@@ -22,7 +22,9 @@ type Props = {
   height?: number
 }
 
-export default function AICopilotChat({ apiUrl = `http://${window.location.hostname}:8000`, height = 500 }: Props) {
+export default function AICopilotChat({ apiUrl, height = 500 }: Props) {
+  // Use /api proxy path which goes through the same origin
+  const backendUrl = apiUrl || '/api'
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '0',
@@ -59,7 +61,7 @@ export default function AICopilotChat({ apiUrl = `http://${window.location.hostn
     setLoading(true)
 
     try {
-      const response = await fetch(`${apiUrl}/chat`, {
+      const response = await fetch(`${backendUrl}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -87,7 +89,7 @@ export default function AICopilotChat({ apiUrl = `http://${window.location.hostn
       const errorMessage: Message = {
         id: Math.random().toString(),
         role: 'assistant',
-        content: 'Sorry, I encountered an error. Make sure the backend server is running at ' + apiUrl,
+        content: 'Sorry, I encountered an error. Make sure the backend server is running at ' + backendUrl,
         timestamp: new Date().toISOString()
       }
       setMessages((prev) => [...prev, errorMessage])

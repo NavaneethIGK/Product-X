@@ -19,22 +19,8 @@ type Metrics = {
 }
 
 export default function AICopilot() {
-  // Determine backend URL based on environment
-  // If running on Ubuntu server (e.g., 103.174.10.207:5000), backend is on same host
-  // In dev, backend is localhost:8000
-  const getBackendUrl = () => {
-    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-    if (isLocalhost) {
-      return 'http://localhost:8000'
-    }
-    // On remote server, use same host but different port (or path via proxy)
-    // Option 1: Backend on same host, different port
-    return `http://${window.location.hostname}:8000`
-    // Option 2: If using reverse proxy on same port, use /api
-    // return '/api'
-  }
-  
-  const backendUrl = getBackendUrl()
+  // Use /api proxy path which avoids CORS issues
+  const backendUrl = '/api'
   const [metrics, setMetrics] = useState<Metrics | null>(null)
   const [backendStatus, setBackendStatus] = useState<'checking' | 'online' | 'offline'>('checking')
   const [loading, setLoading] = useState(true)
@@ -47,7 +33,7 @@ export default function AICopilot() {
     try {
       setLoading(true)
 
-      // Check backend health
+      // Check backend health through proxy
       const healthRes = await fetch(`${backendUrl}/health`)
       if (healthRes.ok) {
         setBackendStatus('online')
