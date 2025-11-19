@@ -2,13 +2,11 @@ module.exports = {
   apps: [
     {
       name: "copilot-backend",
-      script: "python3",
+      script: "/usr/bin/python3",
       args: "copilot_backend.py",
       cwd: "/home/ubuntu/Product-X",
-      interpreter: "/usr/bin/python3",
       env: {
-        PYTHONUNBUFFERED: 1,
-        PATH: "/usr/local/bin:/usr/bin:/bin"
+        PYTHONUNBUFFERED: 1
       },
       error_file: "./logs/backend-err.log",
       out_file: "./logs/backend-out.log",
