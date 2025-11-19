@@ -22,7 +22,7 @@ type Props = {
   height?: number
 }
 
-export default function AICopilotChat({ apiUrl = 'http://localhost:8000', height = 500 }: Props) {
+export default function AICopilotChat({ apiUrl = `http://${window.location.hostname}:8000`, height = 500 }: Props) {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '0',
