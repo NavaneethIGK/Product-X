@@ -30,7 +30,9 @@ export default function AICopilot() {
     if (isLocalhost) return '/api'
     
     // Remote server: use same hostname, port 8000
-    return `http://${window.location.hostname}:8000`
+    const url = `http://${window.location.hostname}:8000`
+    console.log('Backend URL:', url, 'Hostname:', window.location.hostname)
+    return url
   }
   
   const backendUrl = getBackendUrl()
