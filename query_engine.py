@@ -241,13 +241,19 @@ def get_sku_delay_analysis(limit: int = 10, **kwargs) -> QueryResult:
                 summary="No data available"
             )
         
+        # Normalize status to uppercase and strip whitespace
+        df['status_norm'] = df['status'].astype(str).str.strip().str.upper()
         df['expected_arrival'] = pd.to_datetime(df['expected_arrival'], errors='coerce')
         df['arrived_at'] = pd.to_datetime(df['arrived_at'], errors='coerce')
         
-        arrived = df[df['status'] == 'ARRIVED'].copy()
-        arrived.loc[:, 'is_delayed'] = arrived['arrived_at'] > arrived['expected_arrival']
+        # A shipment is delayed if:
+        # 1. Status is explicitly DELAYED/LATE, OR
+        # 2. arrived_at > expected_arrival (for arrived shipments)
+        df['is_delayed'] = (df['status_norm'].isin(['DELAYED', 'LATE'])) | \
+                           ((df['arrived_at'] > df['expected_arrival']) & (df['arrived_at'].notna()))
         
-        sku_delay_rate = arrived.groupby('sku').agg({
+        # Group by SKU and calculate delay rate across ALL shipments
+        sku_delay_rate = df.groupby('sku').agg({
             'is_delayed': lambda x: (x.sum() / len(x) * 100),
             'shipment_id': 'count'
         }).reset_index()
@@ -280,14 +286,20 @@ def get_route_delay_analysis(limit: int = 10, **kwargs) -> QueryResult:
                 summary="No data available"
             )
         
+        # Normalize status to uppercase and strip whitespace
+        df['status_norm'] = df['status'].astype(str).str.strip().str.upper()
         df['expected_arrival'] = pd.to_datetime(df['expected_arrival'], errors='coerce')
         df['arrived_at'] = pd.to_datetime(df['arrived_at'], errors='coerce')
         df['route'] = df['source_location'] + ' → ' + df['destination_location']
         
-        arrived = df[df['status'] == 'ARRIVED'].copy()
-        arrived.loc[:, 'is_delayed'] = arrived['arrived_at'] > arrived['expected_arrival']
+        # A shipment is delayed if:
+        # 1. Status is explicitly DELAYED/LATE, OR
+        # 2. arrived_at > expected_arrival (for arrived shipments)
+        df['is_delayed'] = (df['status_norm'].isin(['DELAYED', 'LATE'])) | \
+                           ((df['arrived_at'] > df['expected_arrival']) & (df['arrived_at'].notna()))
         
-        route_delay_rate = arrived.groupby('route').agg({
+        # Group by route and calculate delay rate across ALL shipments
+        route_delay_rate = df.groupby('route').agg({
             'is_delayed': lambda x: (x.sum() / len(x) * 100),
             'shipment_id': 'count'
         }).reset_index()
@@ -309,8 +321,66 @@ def get_route_delay_analysis(limit: int = 10, **kwargs) -> QueryResult:
             summary=f"Error: {str(e)}"
         )
 
+def get_orders_by_destination(limit: int = 10, **kwargs) -> QueryResult:
+    """Get shipment count by destination location"""
+    try:
+        df = load_csv()
+        if df.empty:
+            return QueryResult(
+                query_type='orders_by_destination',
+                error="No data available",
+                summary="No data available"
+            )
+        
+        dest_counts = df.groupby('destination_location').size().reset_index(name='shipment_count')
+        dest_counts = dest_counts.sort_values('shipment_count', ascending=False)
+        
+        top_destinations = dest_counts.head(limit).to_dict('records')
+        
+        return QueryResult(
+            query_type='orders_by_destination',
+            result={'total_destinations': len(dest_counts)},
+            data=top_destinations,
+            summary=f"Top {limit} destinations by shipment count"
+        )
+    except Exception as e:
+        return QueryResult(
+            query_type='orders_by_destination',
+            error=str(e),
+            summary=f"Error: {str(e)}"
+        )
+
+def get_orders_by_source(limit: int = 10, **kwargs) -> QueryResult:
+    """Get shipment count by source location"""
+    try:
+        df = load_csv()
+        if df.empty:
+            return QueryResult(
+                query_type='orders_by_source',
+                error="No data available",
+                summary="No data available"
+            )
+        
+        source_counts = df.groupby('source_location').size().reset_index(name='shipment_count')
+        source_counts = source_counts.sort_values('shipment_count', ascending=False)
+        
+        top_sources = source_counts.head(limit).to_dict('records')
+        
+        return QueryResult(
+            query_type='orders_by_source',
+            result={'total_sources': len(source_counts)},
+            data=top_sources,
+            summary=f"Top {limit} source locations by shipment count"
+        )
+    except Exception as e:
+        return QueryResult(
+            query_type='orders_by_source',
+            error=str(e),
+            summary=f"Error: {str(e)}"
+        )
+
 def get_generative_insights(limit: int = 10, **kwargs) -> QueryResult:
-    """Generate insights and recommendations"""
+    """Generate insights and recommendations from supply chain data"""
     try:
         df = load_csv()
         if df.empty:
@@ -323,29 +393,68 @@ def get_generative_insights(limit: int = 10, **kwargs) -> QueryResult:
         # Get summary metrics
         total = len(df)
         arrived = len(df[df['status'] == 'ARRIVED'])
-        delayed = len(df[df['status'] == 'DELAYED'])
-        delay_rate = (delayed / total * 100) if total > 0 else 0
+        in_transit = len(df[df['status'] == 'IN_TRANSIT'])
         
-        summary = f"""## 📊 Supply Chain Insights
+        df['expected_arrival'] = pd.to_datetime(df['expected_arrival'], errors='coerce')
+        df['arrived_at'] = pd.to_datetime(df['arrived_at'], errors='coerce')
+        
+        delayed = len(df[(df['arrived_at'] > df['expected_arrival']) & (df['arrived_at'].notna())])
+        on_time = arrived - delayed
+        delay_rate = (delayed / total * 100) if total > 0 else 0
+        on_time_rate = (on_time / total * 100) if total > 0 else 0
+        
+        # Get top problematic routes
+        df['route'] = df['source_location'] + ' → ' + df['destination_location']
+        route_data = df[df['arrived_at'].notna()].groupby('route').agg({
+            'shipment_id': 'count',
+            'arrived_at': lambda x: (x > df.loc[x.index, 'expected_arrival']).sum()
+        }).reset_index()
+        route_data.columns = ['route', 'total', 'delayed']
+        route_data['delay_rate'] = (route_data['delayed'] / route_data['total'] * 100)
+        top_problem_routes = route_data.nlargest(3, 'delay_rate')
+        
+        # Get SKU insights
+        sku_data = df.groupby('sku').agg({
+            'shipment_id': 'count',
+            'quantity': 'sum'
+        }).reset_index()
+        sku_data.columns = ['sku', 'shipments', 'total_quantity']
+        sku_data = sku_data.sort_values('shipments', ascending=False).head(3)
+        
+        summary = f"""## 📊 Supply Chain Analytics Report
 
-**Performance Metrics:**
-- Total Shipments: {total:,}
-- Arrived: {arrived:,}
-- Delayed: {delayed:,}
-- Delay Rate: {delay_rate:.2f}%
+**Overall Performance:**
+• Total Shipments: {total:,}
+• On-Time Deliveries: {on_time:,} ({on_time_rate:.1f}%)
+• Delayed Deliveries: {delayed:,} ({delay_rate:.1f}%)
+• In Transit: {in_transit:,}
+• Unique SKUs: {df['sku'].nunique()}
+• Unique Routes: {df['route'].nunique()}
 
-**Key Recommendations:**
-1. Focus on reducing delay rate by {min(delay_rate, 30):.1f} percentage points
-2. Investigate top problematic SKUs and routes
-3. Optimize shipping logistics for delayed routes
-4. Implement real-time tracking for high-risk shipments
-5. Set up predictive alerts for potential delays"""
+**Top Problem Routes (by delay rate):**"""
+        
+        for idx, row in top_problem_routes.iterrows():
+            summary += f"\n• {row['route']}: {row['delay_rate']:.1f}% delays ({int(row['delayed'])}/{int(row['total'])} shipments)"
+        
+        summary += f"\n\n**Top SKUs by Volume:**"
+        for idx, row in sku_data.iterrows():
+            summary += f"\n• {row['sku']}: {int(row['shipments'])} shipments ({int(row['total_quantity'])} units)"
+        
+        summary += f"""\n\n**Key Recommendations:**
+1. 🎯 Focus on reducing delay rate from {delay_rate:.1f}% to below 20%
+2. 🚚 Optimize top problem routes for faster transit
+3. 📦 Implement quality checks for high-volume SKUs
+4. ⚠️ Set up predictive alerts for delay-prone routes
+5. 📊 Monitor destination and source patterns for efficiency"""
         
         return QueryResult(
             query_type='generative_insights',
             result={
                 'total_shipments': total,
-                'delay_rate': round(delay_rate, 2)
+                'on_time_rate': round(on_time_rate, 2),
+                'delay_rate': round(delay_rate, 2),
+                'unique_skus': df['sku'].nunique(),
+                'unique_routes': df['route'].nunique()
             },
             data=[],
             summary=summary
@@ -366,6 +475,8 @@ QUERY_HANDLERS = {
     'sku_delay_analysis': get_sku_delay_analysis,
     'route_delay_analysis': get_route_delay_analysis,
     'summary_stats': get_summary_stats,
+    'orders_by_destination': get_orders_by_destination,
+    'orders_by_source': get_orders_by_source,
     'generative_insights': get_generative_insights
 }
 

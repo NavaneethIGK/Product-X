@@ -128,9 +128,11 @@ async def chat(request: ChatRequest):
     try:
         # Step 1: Detect intent from natural language query
         intent = detect_intent(user_query)
+        print(f"🔍 Detected intent: {intent.query_type} (confidence: {intent.confidence})")
         
         # Step 2: Execute structured query based on intent
         query_result = execute_query(intent.query_type, limit=intent.limit)
+        print(f"✅ Query result: {query_result.query_type}")
         
         # Step 3: Format response with structured data + readable summary
         response_text = f"**{query_result.summary}**\n\n"
