@@ -5,8 +5,10 @@ module.exports = {
       script: "python3",
       args: "copilot_backend.py",
       cwd: "/home/ubuntu/Product-X",
+      interpreter: "/usr/bin/python3",
       env: {
-        PYTHONUNBUFFERED: 1
+        PYTHONUNBUFFERED: 1,
+        PATH: "/usr/local/bin:/usr/bin:/bin"
       },
       error_file: "./logs/backend-err.log",
       out_file: "./logs/backend-out.log",
