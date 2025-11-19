@@ -23,8 +23,8 @@ type Props = {
 }
 
 export default function AICopilotChat({ apiUrl, height = 500 }: Props) {
-  // Use /api proxy path which goes through the same origin
-  const backendUrl = apiUrl || '/api'
+  // Use environment variable if available, otherwise use /api proxy
+  const backendUrl = apiUrl || (import.meta as any).env.VITE_API_URL || '/api'
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '0',

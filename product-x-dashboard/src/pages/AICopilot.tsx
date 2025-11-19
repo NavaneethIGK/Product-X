@@ -19,8 +19,8 @@ type Metrics = {
 }
 
 export default function AICopilot() {
-  // Use /api proxy path which avoids CORS issues
-  const backendUrl = '/api'
+  // Use environment variable or /api proxy
+  const backendUrl = (import.meta as any).env.VITE_API_URL || '/api'
   const [metrics, setMetrics] = useState<Metrics | null>(null)
   const [backendStatus, setBackendStatus] = useState<'checking' | 'online' | 'offline'>('checking')
   const [loading, setLoading] = useState(true)
