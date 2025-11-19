@@ -2,8 +2,8 @@ module.exports = {
   apps: [
     {
       name: "copilot-backend",
-      script: "/home/ubuntu/Product-X/run_backend.sh",
-      cwd: "/home/ubuntu/Product-X",
+      script: "bash",
+      args: "-c 'cd /home/ubuntu/Product-X && python3 copilot_backend.py'",
       env: {
         PYTHONUNBUFFERED: 1
       },
@@ -13,9 +13,8 @@ module.exports = {
     },
     {
       name: "dashboard",
-      script: "npm",
-      args: "run dev",
-      cwd: "/home/ubuntu/Product-X/product-x-dashboard",
+      script: "bash",
+      args: "-c 'cd /home/ubuntu/Product-X/product-x-dashboard && npm run dev'",
       env: {
         NODE_ENV: "development"
       },
