@@ -29,10 +29,10 @@ def find_csv():
     
     for path in possible_paths:
         if os.path.exists(path):
-            print(f"✅ Found CSV at: {path}")
+            print(f"[OK] Found CSV at: {path}")
             return path
     
-    print(f"❌ CSV not found. Tried: {possible_paths}")
+    print(f"[ERROR] CSV not found. Tried: {possible_paths}")
     return None
 
 def load_csv() -> pd.DataFrame:
@@ -48,11 +48,11 @@ def load_csv() -> pd.DataFrame:
     
     try:
         _csv_data = pd.read_csv(csv_path)
-        print(f"✅ Loaded {len(_csv_data)} records from {csv_path}")
+        print(f"[OK] Loaded {len(_csv_data)} records from {csv_path}")
         print(f"Columns: {_csv_data.columns.tolist()}")
         return _csv_data
     except Exception as e:
-        print(f"❌ Error loading CSV: {e}")
+        print(f"[ERROR] Error loading CSV: {e}")
         return pd.DataFrame()
 
 def get_sku_count(limit: int = 10, **kwargs) -> QueryResult:
@@ -127,7 +127,7 @@ def get_top_routes(limit: int = 10, **kwargs) -> QueryResult:
             )
         
         # Create route column
-        df['route'] = df['source_location'] + ' → ' + df['destination_location']
+        df['route'] = df['source_location'] + ' -> ' + df['destination_location']
         route_counts = df.groupby('route').size().reset_index(name='shipment_count')
         route_counts = route_counts.sort_values('shipment_count', ascending=False)
         
@@ -290,7 +290,7 @@ def get_route_delay_analysis(limit: int = 10, **kwargs) -> QueryResult:
         df['status_norm'] = df['status'].astype(str).str.strip().str.upper()
         df['expected_arrival'] = pd.to_datetime(df['expected_arrival'], errors='coerce')
         df['arrived_at'] = pd.to_datetime(df['arrived_at'], errors='coerce')
-        df['route'] = df['source_location'] + ' → ' + df['destination_location']
+        df['route'] = df['source_location'] + ' -> ' + df['destination_location']
         
         # A shipment is delayed if:
         # 1. Status is explicitly DELAYED/LATE, OR
@@ -404,7 +404,7 @@ def get_generative_insights(limit: int = 10, **kwargs) -> QueryResult:
         on_time_rate = (on_time / total * 100) if total > 0 else 0
         
         # Get top problematic routes
-        df['route'] = df['source_location'] + ' → ' + df['destination_location']
+        df['route'] = df['source_location'] + ' -> ' + df['destination_location']
         route_data = df[df['arrived_at'].notna()].groupby('route').agg({
             'shipment_id': 'count',
             'arrived_at': lambda x: (x > df.loc[x.index, 'expected_arrival']).sum()
