@@ -4,7 +4,7 @@ module.exports = {
       name: "product-x-dashboard",
       script: "npm",
       args: "run preview -- --host 0.0.0.0 --port 5000",
-      cwd: "/home/ubunut/Product X/product-x-dashboard",
+      cwd: "/home/ubuntu/Product X/product-x-dashboard",
       env: {
         NODE_ENV: "production"
       },
