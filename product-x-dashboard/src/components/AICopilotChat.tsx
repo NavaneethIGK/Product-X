@@ -23,8 +23,25 @@ type Props = {
 }
 
 export default function AICopilotChat({ apiUrl, height = 500 }: Props) {
-  // Use environment variable if available, otherwise use /api proxy
-  const backendUrl = apiUrl || (import.meta as any).env.VITE_API_URL || '/api'
+  // Smart backend URL detection:
+  // 1. If apiUrl provided explicitly, use it
+  // 2. If environment variable set, use it
+  // 3. If localhost/127.0.0.1, use /api proxy (dev mode)
+  // 4. Otherwise use same hostname with port 8000 (production mode)
+  const getBackendUrl = () => {
+    if (apiUrl) return apiUrl
+    
+    const envUrl = (import.meta as any).env.VITE_API_URL
+    if (envUrl) return envUrl
+    
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    if (isLocalhost) return '/api'
+    
+    // Remote server: use same hostname, port 8000
+    return `http://${window.location.hostname}:8000`
+  }
+  
+  const backendUrl = getBackendUrl()
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '0',

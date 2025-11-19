@@ -19,8 +19,21 @@ type Metrics = {
 }
 
 export default function AICopilot() {
-  // Use environment variable or /api proxy
-  const backendUrl = (import.meta as any).env.VITE_API_URL || '/api'
+  // Smart backend URL detection:
+  // 1. If localhost/127.0.0.1, use /api proxy (dev mode)
+  // 2. Otherwise use same hostname with port 8000 (production mode)
+  const getBackendUrl = () => {
+    const envUrl = (import.meta as any).env.VITE_API_URL
+    if (envUrl) return envUrl
+    
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    if (isLocalhost) return '/api'
+    
+    // Remote server: use same hostname, port 8000
+    return `http://${window.location.hostname}:8000`
+  }
+  
+  const backendUrl = getBackendUrl()
   const [metrics, setMetrics] = useState<Metrics | null>(null)
   const [backendStatus, setBackendStatus] = useState<'checking' | 'online' | 'offline'>('checking')
   const [loading, setLoading] = useState(true)
