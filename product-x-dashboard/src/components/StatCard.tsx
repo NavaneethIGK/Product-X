@@ -24,37 +24,42 @@ export default function StatCard({
   return (
     <Paper 
       sx={{ 
-        p: 3, 
+        p: 0.9, 
         elevation: 0,
         borderRadius: 2,
         background: bgGradient || '#ffffff',
         color: bgGradient ? 'white' : 'inherit',
         position: 'relative',
         overflow: 'hidden',
+        minHeight: 68,
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
         '&::before': bgGradient ? {
           content: '""',
           position: 'absolute',
-          top: 0,
-          right: 0,
-          width: 100,
-          height: 100,
+          top: 8,
+          right: 8,
+          width: 56,
+          height: 56,
           borderRadius: '50%',
-          background: 'rgba(255,255,255,0.1)',
+          background: 'rgba(255,255,255,0.08)',
         } : undefined
       }} 
       elevation={bgGradient ? 4 : 1}
     >
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.3 }}>
         <Typography 
           variant="body2" 
           color={bgGradient ? 'inherit' : color} 
-          fontWeight={600} 
+          fontWeight={700}
+          sx={{ fontSize: '0.78rem' }}
         >
           {title}
         </Typography>
-        {icon && <Box sx={{ fontSize: 28, opacity: 0.8 }}>{icon}</Box>}
+        {icon && <Box sx={{ fontSize: 18, opacity: 0.9 }}>{icon}</Box>}
       </Box>
-      <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
+      <Typography variant="h6" sx={{ fontWeight: 800, mb: 0, fontSize: '1.1rem', lineHeight: 1 }}>
         {value}
       </Typography>
       {subtitle && (
