@@ -8,40 +8,65 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass, asdict
 
-@dataclass
 class ShipmentSummary:
     """Structured shipment JSON - never expose raw CSV"""
-    shipment_id: str
-    sku: str
-    quantity: int
-    source: str
-    destination: str
-    route: str
+    def __init__(self, shipment_id: str, sku: str, quantity: int, source: str, destination: str, 
+                 route: str, shipped_date: str, expected_arrival: str, actual_arrival: Optional[str],
+                 status_label: str, transit_days: Optional[int], expected_transit_days: int,
+                 delay_days: Optional[int], risk_score: float, shipment_health: str,
+                 estimated_delay_reason: Optional[str], eta_forecast: Optional[str],
+                 status_interpretation: str, timeline_summary: str, recommendations: List[str],
+                 raw_status: str):
+        self.shipment_id = shipment_id
+        self.sku = sku
+        self.quantity = quantity
+        self.source = source
+        self.destination = destination
+        self.route = route
+        self.shipped_date = shipped_date
+        self.expected_arrival = expected_arrival
+        self.actual_arrival = actual_arrival
+        self.status_label = status_label
+        self.transit_days = transit_days
+        self.expected_transit_days = expected_transit_days
+        self.delay_days = delay_days
+        self.risk_score = risk_score
+        self.shipment_health = shipment_health
+        self.estimated_delay_reason = estimated_delay_reason
+        self.eta_forecast = eta_forecast
+        self.status_interpretation = status_interpretation
+        self.timeline_summary = timeline_summary
+        self.recommendations = recommendations
+        self.raw_status = raw_status
     
-    # Timeline data (normalized)
-    shipped_date: str  # ISO format
-    expected_arrival: str  # ISO format
-    actual_arrival: Optional[str]  # ISO format or null
+    @property
+    def shipped_date_short(self) -> str:
+        """Return short formatted date (e.g., Oct 26, 2025)"""
+        try:
+            dt = pd.to_datetime(self.shipped_date)
+            return dt.strftime('%b %d, %Y')
+        except:
+            return self.shipped_date
     
-    # Derived insights
-    status_label: str  # Human readable: "Delivered On Time", "Delayed", "In Transit", etc.
-    transit_days: Optional[int]  # Actual days taken (if arrived)
-    expected_transit_days: int  # Planned days
-    delay_days: Optional[int]  # Days late (if delayed)
+    @property
+    def expected_arrival_short(self) -> str:
+        """Return short formatted date (e.g., Nov 08, 2025)"""
+        try:
+            dt = pd.to_datetime(self.expected_arrival)
+            return dt.strftime('%b %d, %Y')
+        except:
+            return self.expected_arrival
     
-    # Risk & Health
-    risk_score: float  # 0.0 (low) to 1.0 (high)
-    shipment_health: str  # "Excellent", "Good", "At Risk", "Late"
-    estimated_delay_reason: Optional[str]  # Why it might be delayed
-    eta_forecast: Optional[str]  # Estimated arrival prediction
-    
-    # Human-friendly explanations
-    status_interpretation: str  # Detailed status explanation
-    timeline_summary: str  # When it shipped, when expected, when arrived
-    recommendations: List[str]  # Action items
-    
-    # Raw status for reference (but not primary)
-    raw_status: str
+    @property
+    def actual_arrival_short(self) -> Optional[str]:
+        """Return short formatted date or None"""
+        if not self.actual_arrival:
+            return None
+        try:
+            dt = pd.to_datetime(self.actual_arrival)
+            return dt.strftime('%b %d, %Y')
+        except:
+            return self.actual_arrival
 
 
 def normalize_date(date_value) -> Optional[str]:

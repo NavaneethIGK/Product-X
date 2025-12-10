@@ -29,64 +29,125 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Configuration system for OpenAI API Key
+# Configuration system for OpenAI & Groq API Keys
 class ConfigManager:
     def __init__(self):
-        self.api_key = None
+        self.openai_api_key = None
+        self.grok_api_key = None
+        self.use_grok = False  # Default to OpenAI
         self.load_config()
     
     def load_config(self):
-        """Load API key from environment variable or config file"""
-        # Priority 1: Environment variable
-        if os.getenv('OPENAI_API_KEY'):
-            self.api_key = os.getenv('OPENAI_API_KEY')
-            print("✅ OpenAI API Key loaded from OPENAI_API_KEY environment variable")
-            return
-        
-        # Priority 2: .env file
-        env_file = os.path.join(os.path.dirname(__file__), '.env')
-        if os.path.exists(env_file):
-            try:
-                with open(env_file, 'r') as f:
-                    for line in f:
-                        if line.startswith('OPENAI_API_KEY='):
-                            self.api_key = line.split('=', 1)[1].strip()
-                            print("✅ OpenAI API Key loaded from .env file")
-                            return
-            except Exception as e:
-                print(f"⚠️  Error reading .env file: {e}")
-        
-        # Priority 3: config.json file
+        """Load API keys and provider preference from config.json (Priority 1) or environment (Priority 2)"""
+        # Priority 1: config.json file
         config_file = os.path.join(os.path.dirname(__file__), 'config.json')
         if os.path.exists(config_file):
             try:
                 with open(config_file, 'r') as f:
                     config = json.load(f)
-                    if 'openai_api_key' in config:
-                        self.api_key = config['openai_api_key']
-                        print("✅ OpenAI API Key loaded from config.json")
-                        return
+                    
+                    # New config format
+                    if 'ai_provider' in config:
+                        # New structured format
+                        ai_provider_config = config.get('ai_provider', {})
+                        provider = ai_provider_config.get('provider', 'groq').lower()
+                        
+                        # Load OpenAI config
+                        openai_config = config.get('openai', {})
+                        if openai_config.get('enabled') and openai_config.get('api_key'):
+                            self.openai_api_key = openai_config['api_key']
+                            print("✅ OpenAI API Key loaded from config.json")
+                        
+                        # Load Groq config
+                        groq_config = config.get('groq', {})
+                        if groq_config.get('enabled') and groq_config.get('api_key'):
+                            self.grok_api_key = groq_config['api_key']
+                            print("✅ Groq API Key loaded from config.json")
+                        
+                        # Set provider
+                        self.use_grok = provider == 'groq'
+                        print(f"✅ AI Provider set to: {'GROQ' if self.use_grok else 'OPENAI'} (from config.json)")
+                    else:
+                        # Legacy config format for backward compatibility
+                        if config.get('openai_api_key'):
+                            self.openai_api_key = config['openai_api_key']
+                            print("✅ OpenAI API Key loaded from config.json")
+                        
+                        if config.get('grok_api_key'):
+                            self.grok_api_key = config['grok_api_key']
+                            print("✅ Groq API Key loaded from config.json")
+                        
+                        if 'use_grok' in config:
+                            self.use_grok = config.get('use_grok', False)
+                            print(f"✅ AI Provider set to: {'GROQ' if self.use_grok else 'OPENAI'} (from config.json)")
             except Exception as e:
                 print(f"⚠️  Error reading config.json: {e}")
         
-        print("⚠️  OpenAI API Key not configured. Set OPENAI_API_KEY environment variable or create config.json/. env file")
+        # Priority 2: Environment variables (override config.json)
+        if os.getenv('OPENAI_API_KEY'):
+            self.openai_api_key = os.getenv('OPENAI_API_KEY')
+            print("✅ OpenAI API Key loaded from OPENAI_API_KEY environment variable")
+        
+        if os.getenv('GROQ_API_KEY'):
+            self.grok_api_key = os.getenv('GROQ_API_KEY')
+            print("✅ Groq API Key loaded from GROQ_API_KEY environment variable")
+        
+        if os.getenv('AI_PROVIDER'):
+            provider = os.getenv('AI_PROVIDER').lower()
+            self.use_grok = provider == 'groq'
+            print(f"✅ AI Provider set to: {'GROQ' if self.use_grok else 'OPENAI'} (from environment)")
+        
+        # Print summary
+        print(f"\n📊 AI Configuration Summary:")
+        print(f"  OpenAI Available: {bool(self.openai_api_key)}")
+        print(f"  Groq Available: {bool(self.grok_api_key)}")
+        print(f"  Current Provider: {'🦅 GROQ' if self.use_grok else '🤖 OPENAI'}")
+        
+        if not self.openai_api_key and not self.grok_api_key:
+            print(f"\n⚠️  Warning: No AI providers configured!")
+            print(f"  Update config.json with your API keys and set 'enabled: true'")
+            print(f"  Or set OPENAI_API_KEY or GROQ_API_KEY environment variables")
     
-    def set_api_key(self, api_key: str):
-        """Dynamically set API key at runtime"""
-        self.api_key = api_key
+    def set_openai_key(self, api_key: str):
+        """Dynamically set OpenAI API key"""
+        self.openai_api_key = api_key
         print(f"✅ OpenAI API Key updated (length: {len(api_key)})")
     
-    def get_client(self):
-        """Get OpenAI client with current API key"""
-        if self.api_key:
-            return OpenAI(api_key=self.api_key)
+    def set_grok_key(self, api_key: str):
+        """Dynamically set Groq API key"""
+        self.grok_api_key = api_key
+        print(f"✅ Groq API Key updated (length: {len(api_key)})")
+    
+    def set_provider(self, use_grok: bool):
+        """Switch between OpenAI (False) and Groq (True)"""
+        self.use_grok = use_grok
+        provider_name = "🦅 GROQ" if use_grok else "🤖 OPENAI"
+        print(f"✅ AI Provider switched to: {provider_name}")
+    
+    def get_openai_client(self):
+        """Get OpenAI client"""
+        if self.openai_api_key:
+            return OpenAI(api_key=self.openai_api_key)
         return None
+    
+    def get_current_provider(self):
+        """Get name of current provider"""
+        if self.use_grok:
+            return "grok" if self.grok_api_key else None
+        else:
+            return "openai" if self.openai_api_key else None
+    
+    def is_configured(self):
+        """Check if at least one provider is configured"""
+        return bool(self.openai_api_key or self.grok_api_key)
 
 # Initialize configuration manager
 config_manager = ConfigManager()
-client = config_manager.get_client()
+client = config_manager.get_openai_client() if not config_manager.use_grok else None
 
-print(f"🤖 OpenAI Configured: {client is not None}")
+print(f"\n🚀 AI Copilot Initialized")
+print(f"   Current Provider: {'🦅 GROQ' if config_manager.use_grok else '🤖 OPENAI'}")
+print(f"   Configured: {config_manager.is_configured()}")
 
 # Load models
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -116,11 +177,14 @@ class InsightRequest(BaseModel):
     top_n: int = 10
 
 class ConfigRequest(BaseModel):
-    openai_api_key: str
+    openai_api_key: Optional[str] = None
+    grok_api_key: Optional[str] = None
+    use_grok: Optional[bool] = None
 
 class ConfigResponse(BaseModel):
     message: str
-    openai_configured: bool
+    provider: str
+    configured: bool
 
 # Routes
 @app.get("/health")
@@ -128,31 +192,95 @@ async def health():
     return {
         "status": "ok",
         "timestamp": datetime.now().isoformat(),
-        "openai_configured": client is not None
+        "current_provider": config_manager.get_current_provider(),
+        "openai_available": bool(config_manager.openai_api_key),
+        "grok_available": bool(config_manager.grok_api_key),
+        "is_configured": config_manager.is_configured()
     }
 
 @app.get("/config")
 async def get_config():
     """Get current configuration status"""
     return {
-        "openai_configured": config_manager.api_key is not None,
-        "api_key_length": len(config_manager.api_key) if config_manager.api_key else 0,
-        "api_key_preview": f"{config_manager.api_key[:20]}...{config_manager.api_key[-4:]}" if config_manager.api_key else "Not configured"
+        "current_provider": "🦅 GROQ" if config_manager.use_grok else "🤖 OPENAI",
+        "openai_configured": bool(config_manager.openai_api_key),
+        "openai_preview": f"{config_manager.openai_api_key[:20]}...{config_manager.openai_api_key[-4:]}" if config_manager.openai_api_key else "Not configured",
+        "groq_configured": bool(config_manager.grok_api_key),
+        "groq_preview": f"{config_manager.grok_api_key[:20]}...{config_manager.grok_api_key[-4:]}" if config_manager.grok_api_key else "Not configured",
+        "use_grok_setting": config_manager.use_grok
     }
+
+@app.post("/config/provider")
+async def set_provider_config(request: ConfigRequest):
+    """Configure AI provider (OpenAI or Groq) with optional API keys"""
+    try:
+        message_parts = []
+        
+        # Set API keys if provided
+        if request.openai_api_key:
+            config_manager.set_openai_key(request.openai_api_key)
+            message_parts.append("✅ OpenAI API key configured")
+        
+        if request.grok_api_key:
+            config_manager.set_grok_key(request.grok_api_key)
+            message_parts.append("✅ Groq API key configured")
+        
+        # Switch provider if requested
+        if request.use_grok is not None:
+            config_manager.set_provider(request.use_grok)
+            provider_name = "🦅 GROQ" if request.use_grok else "🤖 OPENAI"
+            message_parts.append(f"Provider switched to: {provider_name}")
+        
+        global client
+        client = config_manager.get_openai_client() if not config_manager.use_grok else None
+        
+        return ConfigResponse(
+            message=" | ".join(message_parts) if message_parts else "Configuration unchanged",
+            provider="🦅 GROQ" if config_manager.use_grok else "🤖 OPENAI",
+            configured=config_manager.is_configured()
+        )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to configure provider: {str(e)}")
 
 @app.post("/config/openai")
 async def set_openai_config(request: ConfigRequest):
-    """Set OpenAI API key dynamically"""
+    """Set OpenAI API key dynamically (legacy endpoint)"""
     try:
-        config_manager.set_api_key(request.openai_api_key)
+        if not request.openai_api_key:
+            raise ValueError("openai_api_key is required")
+        
+        config_manager.set_openai_key(request.openai_api_key)
+        config_manager.set_provider(False)  # Switch to OpenAI
         global client
-        client = config_manager.get_client()
+        client = config_manager.get_openai_client()
+        
         return ConfigResponse(
             message="✅ OpenAI API key configured successfully",
-            openai_configured=True
+            provider="🤖 OPENAI",
+            configured=True
         )
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to configure API key: {str(e)}")
+
+@app.post("/config/groq")
+async def set_groq_config(request: ConfigRequest):
+    """Set Groq API key dynamically"""
+    try:
+        if not request.grok_api_key:
+            raise ValueError("grok_api_key is required")
+        
+        config_manager.set_grok_key(request.grok_api_key)
+        config_manager.set_provider(True)  # Switch to Groq
+        global client
+        client = None  # Groq doesn't use OpenAI client
+        
+        return ConfigResponse(
+            message="✅ Groq API key configured successfully",
+            provider="🦅 GROQ",
+            configured=True
+        )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to configure Groq: {str(e)}")
 
 @app.get("/models")
 async def get_models():
@@ -221,10 +349,12 @@ async def get_insights(request: InsightRequest):
     return insights
 
 def generate_insights(user_query: str, intent: QueryIntent, query_result: QueryResult) -> str:
-    """Generate AI insights using OpenAI with proper context shaping"""
+    """Generate AI insights using configured provider (OpenAI or Groq)"""
     
-    if not config_manager.api_key:
-        return f"📊 {query_result.summary}"
+    # Check if any provider is configured
+    if not config_manager.is_configured():
+        print("⚠️ No AI providers configured. Using fallback...")
+        return generate_expert_fallback_from_query(intent, query_result)
     
     try:
         from data_enrichment import enrich_shipment
@@ -232,10 +362,6 @@ def generate_insights(user_query: str, intent: QueryIntent, query_result: QueryR
             build_shipment_context, build_aggregated_context,
             get_system_prompt_for_intent, generate_guaranteed_insights
         )
-        
-        current_client = config_manager.get_client()
-        if not current_client:
-            return f"📊 {query_result.summary}"
         
         # Build LLM context based on query type
         llm_context = None
@@ -275,10 +401,8 @@ def generate_insights(user_query: str, intent: QueryIntent, query_result: QueryR
         
         # Build prompt with context shaping
         if llm_context_str:
-            # Use professional, structured context from enrichment layer
             context_for_llm = llm_context_str
         else:
-            # Fallback to JSON context
             context_for_llm = f"""SHIPMENT DATA CONTEXT:
 {json.dumps(llm_context, indent=2, default=str)}"""
         
@@ -305,9 +429,33 @@ Provide a professional, insightful response that:
             }
         ]
         
-        print(f"🤖 Calling OpenAI API with professional context shaping...")
-        print(f"   Model: gpt-3.5-turbo")
-        print(f"   API Key: {config_manager.api_key[:20]}...{config_manager.api_key[-4:]}")
+        # USE GROQ
+        if config_manager.use_grok:
+            return call_grok_api(messages, system_prompt, user_query)
+        
+        # USE OPENAI
+        else:
+            return call_openai_api(messages, user_query)
+        
+    except Exception as e:
+        error_msg = str(e)
+        print(f"⚠️ Error: {error_msg}")
+        import traceback
+        traceback.print_exc()
+        # Use fallback for this query
+        return generate_expert_fallback_from_query(intent, query_result)
+
+
+def call_openai_api(messages: List[Dict], user_query: str) -> str:
+    """Call OpenAI API"""
+    try:
+        current_client = config_manager.get_openai_client()
+        if not current_client:
+            return "⚠️ OpenAI API is not configured. Please add your OpenAI API key to config.json or environment variables."
+        
+        print(f"\n🤖 USING OPENAI")
+        print(f"   Calling OpenAI API with gpt-3.5-turbo...")
+        print(f"   API Key Preview: {config_manager.openai_api_key[:20]}...{config_manager.openai_api_key[-4:]}")
         
         response = current_client.chat.completions.create(
             model="gpt-3.5-turbo",
@@ -318,100 +466,167 @@ Provide a professional, insightful response that:
         )
         
         ai_response = response.choices[0].message.content
-        print(f"✨ AI Response Generated from OpenAI")
-        print(f"   Tokens used: {response.usage.total_tokens}")
+        print(f"✨ Response Generated Successfully from OpenAI")
+        print(f"   Tokens Used: {response.usage.total_tokens}")
         return ai_response
         
     except Exception as e:
         error_msg = str(e)
-        print(f"⚠️ OpenAI Error: {error_msg}")
+        print(f"❌ OpenAI API Error: {error_msg}")
         
-        # Handle specific error types gracefully
         if "429" in error_msg or "quota" in error_msg.lower() or "insufficient_quota" in error_msg.lower():
-            print(f"⚠️ API Quota exceeded. Generating expert insights without OpenAI...")
-            return generate_expert_fallback_response(intent, query_result)
+            print(f"⚠️ OpenAI quota exceeded. Check your billing at https://platform.openai.com/account/billing/overview")
+            return "⚠️ OpenAI quota has been exceeded. Please check your billing details or switch to Grok."
         elif "401" in error_msg or "unauthorized" in error_msg.lower():
-            print(f"⚠️ API authentication failed. Using fallback mode...")
-            return generate_expert_fallback_response(intent, query_result)
+            print(f"⚠️ OpenAI authentication failed. Check your API key...")
+            return "❌ OpenAI authentication failed. Please verify your API key."
+        
+        print(f"Error details: {error_msg}")
+        return "⚠️ OpenAI API is currently unavailable. Please try again later."
+
+
+def call_grok_api(messages: List[Dict], system_prompt: str, user_query: str) -> str:
+    """Call Groq API (via groq.com)"""
+    try:
+        if not config_manager.grok_api_key:
+            print("❌ Groq API key not configured!")
+            return "⚠️ Groq API is not configured. Please add your Groq API key to config.json or environment variables."
+        
+        print(f"\n🦅 USING GROQ")
+        print(f"   Calling Groq API via groq.com...")
+        print(f"   API Key Preview: {config_manager.grok_api_key[:20]}...{config_manager.grok_api_key[-4:]}")
+        
+        # Groq API endpoint (groq.com API service)
+        import requests
+        
+        headers = {
+            "Authorization": f"Bearer {config_manager.grok_api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "model": "llama-3.3-70b-versatile",
+            "messages": messages,
+            "temperature": 0.7,
+            "max_tokens": 1200
+        }
+        
+        # Groq API endpoint
+        response = requests.post(
+            "https://api.groq.com/openai/v1/chat/completions",  # Groq API endpoint
+            json=payload,
+            headers=headers,
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            ai_response = data['choices'][0]['message']['content']
+            print(f"✨ Response Generated Successfully from Groq")
+            print(f"   Model: llama-3.3-70b-versatile")
+            return ai_response
         else:
-            # Other errors
-            import traceback
-            traceback.print_exc()
-            return generate_expert_fallback_response(intent, query_result)
+            error_detail = response.text
+            print(f"❌ Groq API Error: {response.status_code}")
+            print(f"   Details: {error_detail}")
+            
+            # Return graceful fallback
+            return "⚠️ Groq API temporarily unavailable. Please check your API key and try again."
+        
+    except Exception as e:
+        error_msg = str(e)
+        print(f"❌ Groq API Error: {error_msg}")
+        
+        if "401" in error_msg or "unauthorized" in error_msg.lower():
+            print(f"⚠️ Groq authentication failed. Check your API key...")
+            return "❌ Groq authentication failed. Please verify your API key."
+        elif "429" in error_msg or "rate" in error_msg.lower():
+            print(f"⚠️ Groq rate limit exceeded...")
+            return "⚠️ Groq rate limit exceeded. Please try again later."
+        
+        print(f"Error details: {error_msg}")
+        return "⚠️ Groq API is currently unavailable. Please try again later."
 
 
-def generate_expert_fallback_response(intent: QueryIntent, query_result: QueryResult) -> str:
-    """Generate professional expert response WITHOUT OpenAI
+def generate_expert_fallback_from_query(intent: Optional[QueryIntent], query_result: Optional[QueryResult]) -> str:
+    """Generate professional expert response using enriched data
     
-    Uses enriched data to create insightful, human-friendly responses
-    when API is unavailable.
+    Handles None values gracefully and returns meaningful response based on query type
     """
+    
+    if intent is None or query_result is None:
+        return "⚠️ AI analysis service temporarily unavailable. Please try again later or switch to a different AI provider."
+    
     try:
         from data_enrichment import enrich_shipment
         
         response_parts = []
         
         if intent.query_type == 'shipment_details' and query_result.data:
-            # Single shipment analysis
+            # Single shipment analysis - PROFESSIONAL & CONCISE
             try:
                 enriched = enrich_shipment(query_result.data[0])
                 
-                response_parts.append("## 📦 SHIPMENT STATUS ANALYSIS\n")
-                response_parts.append(f"**Shipment ID:** {enriched.shipment_id}\n")
-                response_parts.append(f"**Status:** {enriched.status_label}\n\n")
+                # Executive Summary
+                response_parts.append(f"## SHIPMENT {enriched.shipment_id}: {enriched.status_label}\n\n")
                 
-                response_parts.append("### 📅 Timeline\n")
-                response_parts.append(f"- Shipped: {enriched.shipped_date}\n")
-                response_parts.append(f"- Expected Arrival: {enriched.expected_arrival}\n")
+                # Key Metrics
+                response_parts.append("**SHIPMENT OVERVIEW**\n")
+                response_parts.append(f"• Product: {enriched.sku} ({enriched.quantity} units)\n")
+                response_parts.append(f"• Route: {enriched.source} → {enriched.destination}\n")
+                
+                # Timeline
+                response_parts.append("\n**DELIVERY TIMELINE**\n")
+                response_parts.append(f"• Shipped: {enriched.shipped_date_short}\n")
+                response_parts.append(f"• Expected: {enriched.expected_arrival_short}\n")
                 if enriched.actual_arrival:
-                    response_parts.append(f"- Actual Arrival: {enriched.actual_arrival}\n")
-                response_parts.append(f"- Transit Days: {enriched.transit_days or 'In progress'}\n")
-                response_parts.append(f"- Delay: {enriched.delay_days or 0} days\n\n")
+                    response_parts.append(f"• Delivered: {enriched.actual_arrival_short}\n")
+                    response_parts.append(f"• Transit Time: {enriched.transit_days} days\n")
+                else:
+                    response_parts.append(f"• Status: In Transit ({enriched.delay_days} days overdue)\n")
                 
-                response_parts.append("### 📍 Route & Cargo\n")
-                response_parts.append(f"- Route: {enriched.source} → {enriched.destination}\n")
-                response_parts.append(f"- SKU: {enriched.sku} (Qty: {enriched.quantity} units)\n\n")
+                # Risk & Health Assessment
+                risk_emoji = "🔴" if enriched.risk_score > 0.7 else "🟡" if enriched.risk_score > 0.4 else "🟢"
+                response_parts.append(f"\n**RISK ASSESSMENT**\n")
+                response_parts.append(f"• Risk Level: {risk_emoji} {'HIGH' if enriched.risk_score > 0.7 else 'MEDIUM' if enriched.risk_score > 0.4 else 'LOW'}\n")
+                response_parts.append(f"• Health: {enriched.shipment_health}\n")
                 
-                response_parts.append("### ⚠️ Risk Assessment\n")
-                risk_level = "HIGH 🔴" if enriched.risk_score > 0.7 else "MEDIUM 🟡" if enriched.risk_score > 0.4 else "LOW 🟢"
-                response_parts.append(f"- Risk Level: {risk_level}\n")
-                response_parts.append(f"- Health Status: {enriched.shipment_health}\n")
-                if enriched.estimated_delay_reason:
-                    response_parts.append(f"- Delay Reason: {enriched.estimated_delay_reason}\n\n")
-                
-                response_parts.append("### ✅ Recommendations\n")
-                for i, rec in enumerate(enriched.recommendations[:3], 1):
-                    response_parts.append(f"{i}. {rec}\n")
+                # Recommendations
+                if enriched.recommendations:
+                    response_parts.append(f"\n**ACTION ITEMS**\n")
+                    for i, rec in enumerate(enriched.recommendations[:2], 1):
+                        response_parts.append(f"{i}. {rec}\n")
                 
             except Exception as e:
-                print(f"Enrichment error in fallback: {e}")
-                response_parts.append(query_result.summary)
+                print(f"Enrichment error: {e}")
+                response_parts.append(f"{query_result.summary}\n")
         
         elif query_result.data:
             # Multi-shipment analysis
-            response_parts.append(f"## 📊 ANALYSIS: {query_result.summary}\n\n")
-            response_parts.append("### 🔍 Key Findings\n")
+            response_parts.append(f"## {query_result.summary}\n\n")
+            response_parts.append("**KEY FINDINGS**\n")
             
             if query_result.result:
                 for key, value in query_result.result.items():
-                    response_parts.append(f"- **{key}**: {value}\n")
+                    response_parts.append(f"• {key}: {value}\n")
             
-            response_parts.append("\n### 📈 Top Items\n")
-            for i, item in enumerate(query_result.data[:5], 1):
-                if isinstance(item, dict):
-                    summary = " | ".join([f"{k}: {v}" for k, v in list(item.items())[:3]])
-                    response_parts.append(f"{i}. {summary}\n")
+            if len(query_result.data) > 0:
+                response_parts.append(f"\n**TOP ITEMS** (Showing {min(3, len(query_result.data))} of {len(query_result.data)})\n")
+                for i, item in enumerate(query_result.data[:3], 1):
+                    if isinstance(item, dict):
+                        summary = " | ".join([f"{k}: {v}" for k, v in list(item.items())[:2]])
+                        response_parts.append(f"{i}. {summary}\n")
         
         else:
-            response_parts.append(query_result.summary)
-        
-        response_parts.append("\n\n_📝 Note: Response generated using enriched data analysis (OpenAI service temporarily unavailable)_")
+            response_parts.append(f"{query_result.summary}\n")
         
         return "".join(response_parts)
     
     except Exception as e:
         print(f"Fallback generation error: {e}")
-        return query_result.summary
+        if query_result and query_result.summary:
+            return f"{query_result.summary}"
+        return "⚠️ Analysis unavailable. Please try again later."
 
 def format_response(ai_insights: str, query_result: QueryResult) -> str:
     """Format final response with insights and data"""
