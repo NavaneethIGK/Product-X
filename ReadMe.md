@@ -94,10 +94,13 @@ Conversational interface for supply chain analytics:
 - **NLP → SQL Pipeline**: Converts natural language to data queries
 - **Real-time Analysis**: Instant answers from 1M shipment dataset
 - **Smart Aggregations**: Intelligent detection of "most" vs "least" queries ⭐ NEW
+- **Location Filtering**: Get detailed stats for specific destinations ⭐ NEW
 
 **Example Questions:**
 - "How many SKUs do we have?" → Returns: 500 unique SKUs
 - "Which SKU have more shipments?" → Returns: Top 10 SKUs by order count
+- **"How many shipments to US-LAX?"** → Returns: 150,250 with breakdown ⭐ NEW
+- **"Orders from IN-DEL"** → Returns: Count, status breakdown, destinations ⭐ NEW
 - "What's causing delays?" → Returns: Analysis of problematic routes/SKUs
 - "How can we reduce delays?" → Returns: Actionable recommendations
 - **"Which destination has less shipment?"** → Returns: Ranked destinations by least shipments ⭐ NEW
