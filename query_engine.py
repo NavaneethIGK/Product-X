@@ -19,20 +19,20 @@ class QueryResult:
 _csv_data = None
 
 def find_csv():
-    """Find CSV file in multiple locations"""
-    possible_paths = [
-        'shipment_data_1M.csv',
-        'shipment_data.csv',
-        './shipment_data_1M.csv',
-        './shipment_data.csv',
-    ]
+    """Find CSV file in the same directory as this script"""
+    # Get the directory where this script is located
+    script_dir = os.path.dirname(os.path.abspath(__file__))
     
-    for path in possible_paths:
-        if os.path.exists(path):
-            print(f"[OK] Found CSV at: {path}")
-            return path
+    # CSV file names to search for
+    csv_filenames = ['shipment_data_1M.csv', 'shipment_data.csv']
     
-    print(f"[ERROR] CSV not found. Tried: {possible_paths}")
+    for filename in csv_filenames:
+        csv_path = os.path.join(script_dir, filename)
+        if os.path.exists(csv_path):
+            print(f"[OK] Found CSV at: {csv_path}")
+            return csv_path
+    
+    print(f"[ERROR] CSV not found in {script_dir}. Looked for: {csv_filenames}")
     return None
 
 def load_csv() -> pd.DataFrame:
@@ -499,6 +499,75 @@ We're actively enhancing our AI to understand this query better! Our model is be
 """
     )
 
+def get_shipment_details(shipment_id: str, **kwargs) -> QueryResult:
+    """Get details for a specific shipment using enrichment layer"""
+    try:
+        from data_enrichment import enrich_shipment
+        
+        df = load_csv()
+        if df.empty:
+            return QueryResult(
+                query_type='shipment_details',
+                error="No data available",
+                summary="No data available"
+            )
+        
+        # Normalize shipment_id for case-insensitive matching
+        normalized_id = shipment_id.strip().upper()
+        
+        # Try to find the shipment (handle both case-sensitive and case-insensitive)
+        shipment = df[df['shipment_id'].astype(str).str.strip().str.upper() == normalized_id]
+        
+        if shipment.empty:
+            return QueryResult(
+                query_type='shipment_details',
+                error=f"Shipment {shipment_id} not found",
+                summary=f"No shipment found with ID: {shipment_id}"
+            )
+        
+        # Use enrichment layer to transform raw data
+        enriched = enrich_shipment(shipment.iloc[0].to_dict())
+        
+        # Return as structured JSON (NOT raw CSV)
+        return QueryResult(
+            query_type='shipment_details',
+            result={
+                'shipment_id': enriched.shipment_id,
+                'sku': enriched.sku,
+                'quantity': enriched.quantity,
+                'status': enriched.status_label,
+                'health': enriched.shipment_health,
+                'risk_score': enriched.risk_score,
+            },
+            data=[{
+                'shipment_id': enriched.shipment_id,
+                'sku': enriched.sku,
+                'quantity': enriched.quantity,
+                'route': enriched.route,
+                'status': enriched.status_label,
+                'status_interpretation': enriched.status_interpretation,
+                'shipped_date': enriched.shipped_date,
+                'expected_arrival': enriched.expected_arrival,
+                'actual_arrival': enriched.actual_arrival,
+                'transit_days': enriched.transit_days,
+                'delay_days': enriched.delay_days,
+                'health': enriched.shipment_health,
+                'risk_score': enriched.risk_score,
+                'timeline_summary': enriched.timeline_summary,
+                'eta_forecast': enriched.eta_forecast,
+                'recommendations': enriched.recommendations,
+            }],
+            summary=f"Shipment {enriched.shipment_id}: {enriched.status_label}"
+        )
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return QueryResult(
+            query_type='shipment_details',
+            error=str(e),
+            summary=f"Error retrieving shipment details: {str(e)}"
+        )
+
 # Query dispatcher
 QUERY_HANDLERS = {
     'sku_count': get_sku_count,
@@ -511,6 +580,7 @@ QUERY_HANDLERS = {
     'orders_by_destination': get_orders_by_destination,
     'orders_by_source': get_orders_by_source,
     'generative_insights': get_generative_insights,
+    'shipment_details': get_shipment_details,
     'training_mode': get_training_mode
 }
 

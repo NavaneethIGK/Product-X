@@ -17,7 +17,114 @@ def detect_intent(user_query: str) -> QueryIntent:
     """Convert natural language query to structured intent"""
     query_lower = user_query.lower().strip()
     
+    # ========== SHIPMENT TRACKING INTENTS (highest priority) ==========
+    
+    # SHIPMENT DETAILS / TRACK SHIPMENT - "SHP-", "shipment", "track", "where is"
+    if any(phrase in query_lower for phrase in ['shp-', 'shipment_id', 'shipment number', 'track shipment', 'tracking number']):
+        import re
+        match = re.search(r'(shp[- ]?\d+)', query_lower, re.IGNORECASE)
+        if match:
+            shipment_id = match.group(1).replace(' ', '-').upper()
+            return QueryIntent(query_type='shipment_details', filters={'shipment_id': shipment_id}, confidence=0.98)
+    
+    # TRACK SHIPMENT / WHERE IS MY ORDER - Generic tracking queries
+    if any(phrase in query_lower for phrase in ['track', 'where is', 'where\'s my', 'find my', 'locate my', 'status of', 'my order']):
+        # Try to extract shipment ID if present
+        import re
+        match = re.search(r'(shp[- ]?\d+)', query_lower, re.IGNORECASE)
+        if match:
+            shipment_id = match.group(1).replace(' ', '-').upper()
+            return QueryIntent(query_type='shipment_details', filters={'shipment_id': shipment_id}, confidence=0.95)
+        # If no specific ID, return generic tracker
+        return QueryIntent(query_type='track_shipment', filters={}, confidence=0.85)
+    
+    # SHIPMENT STATUS - "status", "update", "progress"
+    if any(phrase in query_lower for phrase in ['shipment status', 'current status', 'update on', 'progress of', 'how is my']):
+        import re
+        match = re.search(r'(shp[- ]?\d+)', query_lower, re.IGNORECASE)
+        if match:
+            shipment_id = match.group(1).replace(' ', '-').upper()
+            return QueryIntent(query_type='shipment_details', filters={'shipment_id': shipment_id}, confidence=0.95)
+        return QueryIntent(query_type='shipment_status', filters={}, confidence=0.80)
+    
+    # ETA / WHEN WILL IT ARRIVE - "eta", "when", "arrive", "delivery"
+    if any(phrase in query_lower for phrase in ['eta', 'when will', 'when would', 'when should', 'when arrive', 'when deliver', 'delivery date']):
+        import re
+        match = re.search(r'(shp[- ]?\d+)', query_lower, re.IGNORECASE)
+        if match:
+            shipment_id = match.group(1).replace(' ', '-').upper()
+            return QueryIntent(query_type='shipment_details', filters={'shipment_id': shipment_id}, confidence=0.95)
+        return QueryIntent(query_type='track_shipment', filters={}, confidence=0.80)
+    
+    # DELAY REASON - "why delayed", "why late", "delay reason", "what happened"
+    if any(phrase in query_lower for phrase in ['why delay', 'why late', 'why is it late', 'reason for delay', 'what happened', 'what went wrong']):
+        import re
+        match = re.search(r'(shp[- ]?\d+)', query_lower, re.IGNORECASE)
+        if match:
+            shipment_id = match.group(1).replace(' ', '-').upper()
+            return QueryIntent(query_type='shipment_details', filters={'shipment_id': shipment_id}, confidence=0.95)
+        return QueryIntent(query_type='delayed_shipments', filters={}, confidence=0.75)
+    
+    # SKU QUANTITY - "how much", "quantity", "how many units", "quantity of sku"
+    if any(phrase in query_lower for phrase in ['quantity', 'how much', 'how many units', 'units of', 'qty']):
+        import re
+        match = re.search(r'(shp[- ]?\d+)', query_lower, re.IGNORECASE)
+        if match:
+            shipment_id = match.group(1).replace(' ', '-').upper()
+            return QueryIntent(query_type='shipment_details', filters={'shipment_id': shipment_id}, confidence=0.90)
+        return QueryIntent(query_type='orders_per_sku', filters={}, confidence=0.70)
+    
+    # ========== ANALYTICS & INSIGHTS INTENTS ==========
+    
     # SKU COUNT - "how many sku", "total sku", "unique sku"
+    if any(phrase in query_lower for phrase in ['how many sku', 'total sku', 'sku count', 'number of sku', 'unique sku', 'different sku', 'total number']):
+        return QueryIntent(query_type='sku_count', filters={}, confidence=0.95)
+    
+    # ORDERS PER SKU - "orders per sku", "which sku have most orders"
+    if any(phrase in query_lower for phrase in ['orders per sku', 'order count by sku', 'shipments per sku', 'sku have.*order', 'orders by sku', 'sku.*most order']):
+        return QueryIntent(query_type='orders_per_sku', filters={}, limit=10, confidence=0.95)
+    
+    # TOP ROUTES - "top route", "busiest route", "popular route"
+    if any(phrase in query_lower for phrase in ['top route', 'busiest route', 'popular route', 'highest shipment', 'peak route', 'main route']):
+        return QueryIntent(query_type='top_routes', filters={}, limit=10, confidence=0.95)
+    
+    # ROUTE DELAY ANALYSIS - "route" + "delay" or "most"
+    if 'route' in query_lower and any(word in query_lower for word in ['delay', 'most', 'problem']):
+        return QueryIntent(query_type='route_delay_analysis', filters={}, limit=10, confidence=0.95)
+    
+    # PROBLEMATIC ITEMS - catch "problematic" with SKU or general
+    if 'problematic' in query_lower:
+        if 'sku' in query_lower:
+            return QueryIntent(query_type='sku_delay_analysis', filters={}, limit=10, confidence=0.95)
+        else:
+            return QueryIntent(query_type='summary_stats', filters={}, confidence=0.7)
+    
+    # SKU DELAY ANALYSIS - "sku" + "delay" or "problem"
+    if 'sku' in query_lower and any(word in query_lower for word in ['delay', 'problem', 'performance']):
+        return QueryIntent(query_type='sku_delay_analysis', filters={}, limit=10, confidence=0.95)
+    
+    # DELAYED SHIPMENTS - "delayed", "late", "which shipment"
+    if any(phrase in query_lower for phrase in ['delayed shipment', 'late delivery', 'late deliveries', 'which shipment', 'show delayed', 'list delayed']):
+        return QueryIntent(query_type='delayed_shipments', filters={}, limit=10, confidence=0.95)
+    
+    # ORDERS BY DESTINATION - "destination", "to which", "which destination", "more orders"
+    if any(phrase in query_lower for phrase in ['destination', 'to which', 'shipments to', 'orders to', 'which destination have', 'more orders']):
+        return QueryIntent(query_type='orders_by_destination', filters={}, limit=10, confidence=0.95)
+    
+    # ORDERS BY SOURCE - "source", "from which", "orders from"
+    if any(phrase in query_lower for phrase in ['orders from', 'from which', 'source location', 'orders.*source']):
+        return QueryIntent(query_type='orders_by_source', filters={}, limit=10, confidence=0.95)
+    
+    # SUMMARY STATS - "summary", "overview", "total shipments", "statistics"
+    if any(phrase in query_lower for phrase in ['summary', 'overview', 'statistics', 'total shipment', 'current status', 'overall']):
+        return QueryIntent(query_type='summary_stats', filters={}, confidence=0.85)
+    
+    # GENERATIVE INSIGHTS - "recommend", "suggest", "improve", "optimize"
+    if any(phrase in query_lower for phrase in ['recommend', 'suggest', 'improve', 'optimize', 'strategy', 'best practice', 'insight', 'solution']):
+        return QueryIntent(query_type='generative_insights', filters={}, confidence=0.75)
+    
+    # FALLBACK - return summary stats as default (not training mode)
+    return QueryIntent(query_type='summary_stats', filters={}, confidence=0.5)
     if any(phrase in query_lower for phrase in ['how many sku', 'total sku', 'sku count', 'number of sku', 'unique sku', 'different sku', 'total number']):
         return QueryIntent(query_type='sku_count', filters={}, confidence=0.95)
     
