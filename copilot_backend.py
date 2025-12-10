@@ -306,6 +306,8 @@ Provide a professional, insightful response that:
         ]
         
         print(f"🤖 Calling OpenAI API with professional context shaping...")
+        print(f"   Model: gpt-3.5-turbo")
+        print(f"   API Key: {config_manager.api_key[:20]}...{config_manager.api_key[-4:]}")
         
         response = current_client.chat.completions.create(
             model="gpt-3.5-turbo",
@@ -316,7 +318,8 @@ Provide a professional, insightful response that:
         )
         
         ai_response = response.choices[0].message.content
-        print(f"✨ AI Response Generated")
+        print(f"✨ AI Response Generated from OpenAI")
+        print(f"   Tokens used: {response.usage.total_tokens}")
         return ai_response
         
     except Exception as e:
