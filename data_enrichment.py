@@ -367,15 +367,15 @@ def enrich_shipment(row: Dict[str, Any]) -> ShipmentSummary:
     shipment_id = str(row.get('shipment_id', 'UNKNOWN')).strip()
     sku = str(row.get('sku', 'UNKNOWN')).strip()
     quantity = int(row.get('quantity', 0))
-    source = str(row.get('source', row.get('source_location', 'Unknown'))).strip()
-    destination = str(row.get('destination', row.get('destination_location', 'Unknown'))).strip()
+    source = str(row.get('source_location', row.get('source', 'Unknown'))).strip()
+    destination = str(row.get('destination_location', row.get('destination', 'Unknown'))).strip()
     route = str(row.get('route', f"{source} → {destination}")).strip()
     raw_status = str(row.get('status', 'UNKNOWN')).strip()
     
-    # Normalize dates
-    shipped_date = normalize_date(row.get('shipped_date', row.get('departed_at')))
+    # Normalize dates (check both variations of column names)
+    shipped_date = normalize_date(row.get('departed_at', row.get('shipped_date')))
     expected_arrival = normalize_date(row.get('expected_arrival'))
-    actual_arrival = normalize_date(row.get('arrived_at'))
+    actual_arrival = normalize_date(row.get('arrived_at', row.get('actual_arrival')))
     
     # Calculate derived values
     transit_days = calculate_transit_days(shipped_date, actual_arrival)

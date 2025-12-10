@@ -456,32 +456,44 @@ def generate_expert_fallback_from_query(intent: Optional[QueryIntent], query_res
         return "⚠️ Service temporarily unavailable."
     
     try:
-        from data_enrichment import enrich_shipment
-        
-        # SHIPMENT DETAILS - Show only what's requested
+        # SHIPMENT DETAILS - Show enriched shipment data
         if intent.query_type == 'shipment_details' and query_result.data:
             try:
-                enriched = enrich_shipment(query_result.data[0])
+                data = query_result.data[0]  # Already enriched from query_engine
                 
-                response = f"**{enriched.shipment_id}** - {enriched.status_label}\n"
-                response += f"📦 {enriched.sku} ({enriched.quantity} units) | {enriched.source} → {enriched.destination}\n"
-                response += f"📅 Shipped: {enriched.shipped_date_short} | Expected: {enriched.expected_arrival_short}\n"
+                # Build response from enriched data
+                response = f"**{data.get('shipment_id')}** - {data.get('status')}\n"
                 
-                if enriched.actual_arrival:
-                    response += f"✅ Delivered: {enriched.actual_arrival_short} ({enriched.transit_days} days)\n"
+                # Use source/destination if available, otherwise use route
+                source = data.get('source', 'Unknown')
+                destination = data.get('destination', 'Unknown')
+                if source != 'Unknown' and destination != 'Unknown':
+                    route_str = f"{source} → {destination}"
                 else:
-                    response += f"⏳ In Transit ({enriched.delay_days if enriched.delay_days else 0} days overdue)\n"
+                    route_str = data.get('route', 'Unknown → Unknown')
                 
-                risk_emoji = "🔴" if enriched.risk_score > 0.7 else "🟡" if enriched.risk_score > 0.4 else "🟢"
-                response += f"{risk_emoji} Risk: {'HIGH' if enriched.risk_score > 0.7 else 'MEDIUM' if enriched.risk_score > 0.4 else 'LOW'}\n"
+                response += f"📦 {data.get('sku')} ({data.get('quantity')} units) | {route_str}\n"
+                response += f"📅 Shipped: {data.get('shipped_date')} | Expected: {data.get('expected_arrival')}\n"
                 
-                if enriched.recommendations:
+                if data.get('actual_arrival'):
+                    response += f"✅ Delivered: {data.get('actual_arrival')} ({data.get('transit_days')} days)\n"
+                else:
+                    delay_days = data.get('delay_days') or 0
+                    response += f"⏳ In Transit ({delay_days} days overdue)\n"
+                
+                risk_score = data.get('risk_score', 0)
+                risk_emoji = "🔴" if risk_score > 0.7 else "🟡" if risk_score > 0.4 else "🟢"
+                response += f"{risk_emoji} Risk: {'HIGH' if risk_score > 0.7 else 'MEDIUM' if risk_score > 0.4 else 'LOW'}\n"
+                
+                recommendations = data.get('recommendations', [])
+                if recommendations:
                     response += f"\n**Next Steps:**\n"
-                    for i, rec in enumerate(enriched.recommendations[:1], 1):
+                    for i, rec in enumerate(recommendations[:1], 1):
                         response += f"{i}. {rec}\n"
                 
                 return response
             except Exception as e:
+                print(f"Error processing shipment data: {e}")
                 return query_result.summary
         
         # MULTI-SHIPMENT ANALYSIS - Show only the metrics user asked for

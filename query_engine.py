@@ -147,7 +147,7 @@ def get_top_routes(limit: int = 10, **kwargs) -> QueryResult:
         )
 
 def get_delayed_shipments(limit: int = 10, **kwargs) -> QueryResult:
-    """Get delayed shipments"""
+    """Get delayed shipments (including overdue in-transit)"""
     try:
         df = load_csv()
         if df.empty:
@@ -160,18 +160,34 @@ def get_delayed_shipments(limit: int = 10, **kwargs) -> QueryResult:
         df['expected_arrival'] = pd.to_datetime(df['expected_arrival'], errors='coerce')
         df['arrived_at'] = pd.to_datetime(df['arrived_at'], errors='coerce')
         
+        delayed_list = []
+        now = pd.Timestamp.now()
+        
+        # 1. ARRIVED but late
         arrived = df[df['status'] == 'ARRIVED'].copy()
         arrived.loc[:, 'delay_days'] = (arrived['arrived_at'] - arrived['expected_arrival']).dt.days
+        delayed_arrived = arrived[arrived['delay_days'] > 0][['shipment_id', 'sku', 'status', 'delay_days']]
+        delayed_list.append(delayed_arrived)
         
-        delayed = arrived[arrived['delay_days'] > 0].nlargest(limit, 'delay_days')
+        # 2. IN_TRANSIT but overdue (expected date has passed)
+        in_transit = df[df['status'] == 'IN_TRANSIT'].copy()
+        in_transit.loc[:, 'delay_days'] = (now - in_transit['expected_arrival']).dt.days
+        delayed_in_transit = in_transit[in_transit['delay_days'] > 0][['shipment_id', 'sku', 'status', 'delay_days']]
+        delayed_list.append(delayed_in_transit)
         
-        delayed_data = delayed[['shipment_id', 'sku', 'status', 'delay_days']].to_dict('records')
+        # Combine and sort by delay_days
+        if delayed_list:
+            delayed = pd.concat(delayed_list, ignore_index=True)
+            delayed = delayed.nlargest(limit, 'delay_days')
+            delayed_data = delayed.to_dict('records')
+        else:
+            delayed_data = []
         
         return QueryResult(
             query_type='delayed_shipments',
-            result={'total_delayed': len(delayed)},
+            result={'total_delayed': len(delayed_data)},
             data=delayed_data,
-            summary=f"Found {len(delayed)} delayed shipments"
+            summary=f"Found {len(delayed_data)} delayed shipments"
         )
     except Exception as e:
         return QueryResult(
@@ -543,6 +559,8 @@ def get_shipment_details(shipment_id: str, **kwargs) -> QueryResult:
                 'shipment_id': enriched.shipment_id,
                 'sku': enriched.sku,
                 'quantity': enriched.quantity,
+                'source': enriched.source,
+                'destination': enriched.destination,
                 'route': enriched.route,
                 'status': enriched.status_label,
                 'status_interpretation': enriched.status_interpretation,
