@@ -5,9 +5,10 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime
 import json
 import os
-from openai import OpenAI
 from intent_detector import detect_intent, QueryIntent
 from query_engine import execute_query, QueryResult
+from ai_providers_openai import call_openai_api, get_openai_client
+from ai_providers_groq import call_groq_api
 
 app = FastAPI(title="Supply Chain AI Copilot", version="1.0.0")
 
@@ -127,7 +128,7 @@ class ConfigManager:
     def get_openai_client(self):
         """Get OpenAI client"""
         if self.openai_api_key:
-            return OpenAI(api_key=self.openai_api_key)
+            return get_openai_client(self.openai_api_key)
         return None
     
     def get_current_provider(self):
@@ -431,11 +432,13 @@ Provide a professional, insightful response that:
         
         # USE GROQ
         if config_manager.use_grok:
-            return call_grok_api(messages, system_prompt, user_query)
+            from ai_providers_groq import call_groq_api
+            return call_groq_api(config_manager.grok_api_key, messages, system_prompt, user_query)
         
         # USE OPENAI
         else:
-            return call_openai_api(messages, user_query)
+            from ai_providers_openai import call_openai_api
+            return call_openai_api(config_manager.openai_api_key, messages, user_query)
         
     except Exception as e:
         error_msg = str(e)
@@ -446,202 +449,63 @@ Provide a professional, insightful response that:
         return generate_expert_fallback_from_query(intent, query_result)
 
 
-def call_openai_api(messages: List[Dict], user_query: str) -> str:
-    """Call OpenAI API"""
-    try:
-        current_client = config_manager.get_openai_client()
-        if not current_client:
-            return "⚠️ OpenAI API is not configured. Please add your OpenAI API key to config.json or environment variables."
-        
-        print(f"\n🤖 USING OPENAI")
-        print(f"   Calling OpenAI API with gpt-3.5-turbo...")
-        print(f"   API Key Preview: {config_manager.openai_api_key[:20]}...{config_manager.openai_api_key[-4:]}")
-        
-        response = current_client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=messages,
-            temperature=0.7,
-            max_tokens=1200,
-            top_p=0.9
-        )
-        
-        ai_response = response.choices[0].message.content
-        print(f"✨ Response Generated Successfully from OpenAI")
-        print(f"   Tokens Used: {response.usage.total_tokens}")
-        return ai_response
-        
-    except Exception as e:
-        error_msg = str(e)
-        print(f"❌ OpenAI API Error: {error_msg}")
-        
-        if "429" in error_msg or "quota" in error_msg.lower() or "insufficient_quota" in error_msg.lower():
-            print(f"⚠️ OpenAI quota exceeded. Check your billing at https://platform.openai.com/account/billing/overview")
-            return "⚠️ OpenAI quota has been exceeded. Please check your billing details or switch to Grok."
-        elif "401" in error_msg or "unauthorized" in error_msg.lower():
-            print(f"⚠️ OpenAI authentication failed. Check your API key...")
-            return "❌ OpenAI authentication failed. Please verify your API key."
-        
-        print(f"Error details: {error_msg}")
-        return "⚠️ OpenAI API is currently unavailable. Please try again later."
-
-
-def call_grok_api(messages: List[Dict], system_prompt: str, user_query: str) -> str:
-    """Call Groq API (via groq.com)"""
-    try:
-        if not config_manager.grok_api_key:
-            print("❌ Groq API key not configured!")
-            return "⚠️ Groq API is not configured. Please add your Groq API key to config.json or environment variables."
-        
-        print(f"\n🦅 USING GROQ")
-        print(f"   Calling Groq API via groq.com...")
-        print(f"   API Key Preview: {config_manager.grok_api_key[:20]}...{config_manager.grok_api_key[-4:]}")
-        
-        # Groq API endpoint (groq.com API service)
-        import requests
-        
-        headers = {
-            "Authorization": f"Bearer {config_manager.grok_api_key}",
-            "Content-Type": "application/json"
-        }
-        
-        payload = {
-            "model": "llama-3.3-70b-versatile",
-            "messages": messages,
-            "temperature": 0.7,
-            "max_tokens": 1200
-        }
-        
-        # Groq API endpoint
-        response = requests.post(
-            "https://api.groq.com/openai/v1/chat/completions",  # Groq API endpoint
-            json=payload,
-            headers=headers,
-            timeout=30
-        )
-        
-        if response.status_code == 200:
-            data = response.json()
-            ai_response = data['choices'][0]['message']['content']
-            print(f"✨ Response Generated Successfully from Groq")
-            print(f"   Model: llama-3.3-70b-versatile")
-            return ai_response
-        else:
-            error_detail = response.text
-            print(f"❌ Groq API Error: {response.status_code}")
-            print(f"   Details: {error_detail}")
-            
-            # Return graceful fallback
-            return "⚠️ Groq API temporarily unavailable. Please check your API key and try again."
-        
-    except Exception as e:
-        error_msg = str(e)
-        print(f"❌ Groq API Error: {error_msg}")
-        
-        if "401" in error_msg or "unauthorized" in error_msg.lower():
-            print(f"⚠️ Groq authentication failed. Check your API key...")
-            return "❌ Groq authentication failed. Please verify your API key."
-        elif "429" in error_msg or "rate" in error_msg.lower():
-            print(f"⚠️ Groq rate limit exceeded...")
-            return "⚠️ Groq rate limit exceeded. Please try again later."
-        
-        print(f"Error details: {error_msg}")
-        return "⚠️ Groq API is currently unavailable. Please try again later."
-
-
 def generate_expert_fallback_from_query(intent: Optional[QueryIntent], query_result: Optional[QueryResult]) -> str:
-    """Generate professional expert response using enriched data
-    
-    Handles None values gracefully and returns meaningful response based on query type
-    """
+    """Generate concise response answering exactly what user asked (no AI service)"""
     
     if intent is None or query_result is None:
-        return "⚠️ AI analysis service temporarily unavailable. Please try again later or switch to a different AI provider."
+        return "⚠️ Service temporarily unavailable."
     
     try:
         from data_enrichment import enrich_shipment
         
-        response_parts = []
-        
+        # SHIPMENT DETAILS - Show only what's requested
         if intent.query_type == 'shipment_details' and query_result.data:
-            # Single shipment analysis - PROFESSIONAL & CONCISE
             try:
                 enriched = enrich_shipment(query_result.data[0])
                 
-                # Executive Summary
-                response_parts.append(f"## SHIPMENT {enriched.shipment_id}: {enriched.status_label}\n\n")
+                response = f"**{enriched.shipment_id}** - {enriched.status_label}\n"
+                response += f"📦 {enriched.sku} ({enriched.quantity} units) | {enriched.source} → {enriched.destination}\n"
+                response += f"📅 Shipped: {enriched.shipped_date_short} | Expected: {enriched.expected_arrival_short}\n"
                 
-                # Key Metrics
-                response_parts.append("**SHIPMENT OVERVIEW**\n")
-                response_parts.append(f"• Product: {enriched.sku} ({enriched.quantity} units)\n")
-                response_parts.append(f"• Route: {enriched.source} → {enriched.destination}\n")
-                
-                # Timeline
-                response_parts.append("\n**DELIVERY TIMELINE**\n")
-                response_parts.append(f"• Shipped: {enriched.shipped_date_short}\n")
-                response_parts.append(f"• Expected: {enriched.expected_arrival_short}\n")
                 if enriched.actual_arrival:
-                    response_parts.append(f"• Delivered: {enriched.actual_arrival_short}\n")
-                    response_parts.append(f"• Transit Time: {enriched.transit_days} days\n")
+                    response += f"✅ Delivered: {enriched.actual_arrival_short} ({enriched.transit_days} days)\n"
                 else:
-                    response_parts.append(f"• Status: In Transit ({enriched.delay_days} days overdue)\n")
+                    response += f"⏳ In Transit ({enriched.delay_days if enriched.delay_days else 0} days overdue)\n"
                 
-                # Risk & Health Assessment
                 risk_emoji = "🔴" if enriched.risk_score > 0.7 else "🟡" if enriched.risk_score > 0.4 else "🟢"
-                response_parts.append(f"\n**RISK ASSESSMENT**\n")
-                response_parts.append(f"• Risk Level: {risk_emoji} {'HIGH' if enriched.risk_score > 0.7 else 'MEDIUM' if enriched.risk_score > 0.4 else 'LOW'}\n")
-                response_parts.append(f"• Health: {enriched.shipment_health}\n")
+                response += f"{risk_emoji} Risk: {'HIGH' if enriched.risk_score > 0.7 else 'MEDIUM' if enriched.risk_score > 0.4 else 'LOW'}\n"
                 
-                # Recommendations
                 if enriched.recommendations:
-                    response_parts.append(f"\n**ACTION ITEMS**\n")
-                    for i, rec in enumerate(enriched.recommendations[:2], 1):
-                        response_parts.append(f"{i}. {rec}\n")
+                    response += f"\n**Next Steps:**\n"
+                    for i, rec in enumerate(enriched.recommendations[:1], 1):
+                        response += f"{i}. {rec}\n"
                 
+                return response
             except Exception as e:
-                print(f"Enrichment error: {e}")
-                response_parts.append(f"{query_result.summary}\n")
+                return query_result.summary
         
+        # MULTI-SHIPMENT ANALYSIS - Show only the metrics user asked for
         elif query_result.data:
-            # Multi-shipment analysis
-            response_parts.append(f"## {query_result.summary}\n\n")
-            response_parts.append("**KEY FINDINGS**\n")
+            response = f"**{query_result.summary}**\n\n"
             
             if query_result.result:
-                for key, value in query_result.result.items():
-                    response_parts.append(f"• {key}: {value}\n")
+                for key, value in list(query_result.result.items())[:5]:  # Top 5 metrics only
+                    response += f"• {key}: {value}\n"
             
-            if len(query_result.data) > 0:
-                response_parts.append(f"\n**TOP ITEMS** (Showing {min(3, len(query_result.data))} of {len(query_result.data)})\n")
-                for i, item in enumerate(query_result.data[:3], 1):
-                    if isinstance(item, dict):
-                        summary = " | ".join([f"{k}: {v}" for k, v in list(item.items())[:2]])
-                        response_parts.append(f"{i}. {summary}\n")
+            return response
         
         else:
-            response_parts.append(f"{query_result.summary}\n")
-        
-        return "".join(response_parts)
+            return query_result.summary
     
     except Exception as e:
-        print(f"Fallback generation error: {e}")
-        if query_result and query_result.summary:
-            return f"{query_result.summary}"
-        return "⚠️ Analysis unavailable. Please try again later."
+        print(f"Error: {e}")
+        return query_result.summary if query_result else "⚠️ Analysis unavailable."
 
 def format_response(ai_insights: str, query_result: QueryResult) -> str:
-    """Format final response with insights and data"""
+    """Format final response - CONCISE & DIRECT (only what user asked)"""
     
-    response = f"🤖 **AI Analysis:**\n{ai_insights}\n\n"
-    
-    if query_result.data:
-        response += f"📋 **Detailed Data** ({len(query_result.data)} records):\n"
-        for i, record in enumerate(query_result.data[:5], 1):
-            record_str = " | ".join([f"**{k}**: {v}" for k, v in record.items()])
-            response += f"{i}. {record_str}\n"
-    
-    response += f"\n📊 **Summary**: {query_result.summary}"
-    
-    return response
+    # Just return the AI insights - no extra sections
+    return ai_insights
 
 @app.post("/chat")
 async def chat(request: ChatRequest):
