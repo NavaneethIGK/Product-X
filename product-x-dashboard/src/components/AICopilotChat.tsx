@@ -42,6 +42,10 @@ export default function AICopilotChat({ apiUrl, height = 500 }: Props) {
   }
   
   const backendUrl = getBackendUrl()
+  const [sessionId, setSessionId] = useState<string | null>(() => {
+    // Try to load session ID from localStorage
+    return localStorage.getItem('copilot_session_id')
+  })
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '0',
@@ -53,6 +57,28 @@ export default function AICopilotChat({ apiUrl, height = 500 }: Props) {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // Initialize session on component mount
+  useEffect(() => {
+    if (!sessionId) {
+      createNewSession()
+    }
+  }, [])
+
+  const createNewSession = async () => {
+    try {
+      const response = await fetch(`${backendUrl}/session/new`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      })
+      const data = await response.json()
+      setSessionId(data.session_id)
+      localStorage.setItem('copilot_session_id', data.session_id)
+      console.log('New session created:', data.session_id)
+    } catch (error) {
+      console.error('Failed to create session:', error)
+    }
+  }
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -83,7 +109,8 @@ export default function AICopilotChat({ apiUrl, height = 500 }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: [...messages, userMessage].map((m) => ({ role: m.role, content: m.content })),
-          query: userQuery
+          query: userQuery,
+          session_id: sessionId  // Include session ID in request
         })
       })
 
@@ -101,6 +128,12 @@ export default function AICopilotChat({ apiUrl, height = 500 }: Props) {
       }
 
       setMessages((prev) => [...prev, assistantMessage])
+      
+      // Update session ID if returned (new session case)
+      if (data.session_id && data.session_id !== sessionId) {
+        setSessionId(data.session_id)
+        localStorage.setItem('copilot_session_id', data.session_id)
+      }
     } catch (error) {
       console.error('Chat error:', error)
       const errorMessage: Message = {
@@ -115,12 +148,26 @@ export default function AICopilotChat({ apiUrl, height = 500 }: Props) {
     }
   }
 
-  const handleClear = () => {
+  const handleClear = async () => {
+    // Delete current session
+    if (sessionId) {
+      try {
+        await fetch(`${backendUrl}/session/${sessionId}`, {
+          method: 'DELETE'
+        })
+      } catch (error) {
+        console.error('Failed to delete session:', error)
+      }
+    }
+    
+    // Create new session
+    await createNewSession()
+    
     setMessages([
       {
         id: '0',
         role: 'assistant',
-        content: 'Chat cleared. Ask me anything about your supply chain!',
+        content: 'Chat cleared. New session started. Ask me anything about your supply chain!',
         timestamp: new Date().toISOString()
       }
     ])
@@ -150,13 +197,13 @@ export default function AICopilotChat({ apiUrl, height = 500 }: Props) {
             🤖 AI Supply Chain Copilot
           </Typography>
           <Typography variant="caption" sx={{ opacity: 0.95, display: 'block', mt: 0.5, fontWeight: 500 }}>
-            Analyzing 1M shipments • Real-time insights
+            Analyzing 1M shipments • Real-time insights {sessionId && `• Session: ${sessionId.substring(0, 8)}...`}
           </Typography>
         </Box>
         <IconButton 
           size="small" 
           onClick={handleClear} 
-          title="Clear chat" 
+          title="Clear chat and start new session" 
           sx={{ 
             color: 'white',
             '&:hover': {

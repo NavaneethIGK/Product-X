@@ -5,10 +5,82 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime
 import json
 import os
+import uuid
 from intent_detector import detect_intent, QueryIntent
 from query_engine import execute_query, QueryResult
 from ai_providers_openai import call_openai_api, get_openai_client
 from ai_providers_groq import call_groq_api
+
+# Session management for conversation history
+class ConversationSession:
+    """Manages conversation history for a user session"""
+    def __init__(self, session_id: str):
+        self.session_id = session_id
+        self.messages: List[Dict[str, str]] = []  # List of {role, content} dicts
+        self.created_at = datetime.now()
+        self.last_activity = datetime.now()
+        self.context: Dict[str, Any] = {}  # Store extracted entities/context
+    
+    def add_message(self, role: str, content: str):
+        """Add a message to conversation history"""
+        self.messages.append({
+            "role": role,
+            "content": content,
+            "timestamp": datetime.now().isoformat()
+        })
+        self.last_activity = datetime.now()
+    
+    def get_history(self, limit: int = 10) -> List[Dict[str, str]]:
+        """Get last N messages (for API context)"""
+        return [{"role": m["role"], "content": m["content"]} for m in self.messages[-limit:]]
+    
+    def update_context(self, key: str, value: Any):
+        """Store session context (extracted entities, preferences, etc.)"""
+        self.context[key] = value
+    
+    def get_system_prompt(self) -> str:
+        """Generate system prompt with session context - ENFORCE MAXIMUM CONCISENESS"""
+        # Build context of what was already discussed
+        context_items = []
+        if self.context.get('last_shipment_id'):
+            context_items.append(f"Previously discussed: {self.context['last_shipment_id']}")
+        if self.context.get('last_sku'):
+            context_items.append(f"SKU: {self.context['last_sku']}")
+        
+        context_reminder = " | ".join(context_items) if context_items else "First question"
+        
+        base_prompt = f"""You are a Supply Chain AI Assistant. SPEAK LIKE AN EXPERT LOGISTICS MANAGER.
+
+CONSTRAINTS (MUST FOLLOW):
+✓ MAXIMUM 2-3 sentences per answer
+✓ Answer ONLY what was asked - NO extra context or explanations
+✓ If follow-up to previous message, do NOT repeat previously stated facts
+✓ Use precise data only - no assumptions
+✓ For shipment details: "SHP-ID | SKU (qty) | Source→Dest | Status | Risk"
+✓ Never say "I don't have data" - use reasonable inferences
+✓ Format concisely: use emoji and abbreviations (📦=cargo, 📅=date, ⚠️=risk, etc.)
+
+CONVERSATION CONTEXT:
+{context_reminder}
+Messages so far: {len(self.messages)}
+
+RESPONSE STYLE:
+- Follow-up about SHP-0000014 source? Answer: "IN-DEL→IN-DEL"
+- Follow-up asking for risk? Answer: "🔴 HIGH - Overdue 5+ days"
+- Do NOT repeat what was already said 3 messages ago
+- Assume user knows previous context unless asking for clarification"""
+
+        return base_prompt
+
+# Global session storage (in production, use Redis or database)
+sessions: Dict[str, ConversationSession] = {}
+
+def get_or_create_session(session_id: Optional[str] = None) -> ConversationSession:
+    """Get existing session or create new one"""
+    if not session_id or session_id not in sessions:
+        session_id = str(uuid.uuid4())
+        sessions[session_id] = ConversationSession(session_id)
+    return sessions[session_id]
 
 app = FastAPI(title="Supply Chain AI Copilot", version="1.0.0")
 
@@ -172,6 +244,7 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     messages: Optional[List[ChatMessage]] = None
     query: str
+    session_id: Optional[str] = None  # Conversation session ID
 
 class InsightRequest(BaseModel):
     insight_type: str
@@ -349,13 +422,13 @@ async def get_insights(request: InsightRequest):
     
     return insights
 
-def generate_insights(user_query: str, intent: QueryIntent, query_result: QueryResult) -> str:
-    """Generate AI insights using configured provider (OpenAI or Groq)"""
+def generate_insights(user_query: str, intent: QueryIntent, query_result: QueryResult, session: Optional[ConversationSession] = None) -> str:
+    """Generate AI insights using configured provider (OpenAI or Groq) with conversation context"""
     
     # Check if any provider is configured
     if not config_manager.is_configured():
         print("⚠️ No AI providers configured. Using fallback...")
-        return generate_expert_fallback_from_query(intent, query_result)
+        return generate_expert_fallback_from_query(intent, query_result, session=session, user_query=user_query)
     
     try:
         from data_enrichment import enrich_shipment
@@ -366,13 +439,17 @@ def generate_insights(user_query: str, intent: QueryIntent, query_result: QueryR
         
         # Build LLM context based on query type
         llm_context = None
-        system_prompt = get_system_prompt_for_intent(intent.query_type)
+        system_prompt = session.get_system_prompt() if session else get_system_prompt_for_intent(intent.query_type)
         
         # For single shipment queries, enrich the data
         if intent.query_type == 'shipment_details' and query_result.data:
             try:
                 enriched = enrich_shipment(query_result.data[0])
                 llm_context = build_shipment_context(enriched)
+                # Store in session context
+                if session:
+                    session.update_context('last_shipment_id', enriched.shipment_id)
+                    session.update_context('last_sku', enriched.sku)
             except Exception as e:
                 print(f"⚠️ Enrichment error: {e}")
                 llm_context = {"raw_data": query_result.data}
@@ -407,38 +484,71 @@ def generate_insights(user_query: str, intent: QueryIntent, query_result: QueryR
             context_for_llm = f"""SHIPMENT DATA CONTEXT:
 {json.dumps(llm_context, indent=2, default=str)}"""
         
-        messages = [
-            {
-                "role": "system",
-                "content": system_prompt
-            },
-            {
-                "role": "user",
-                "content": f"""Analyze this shipment information and respond according to your professional guidelines:
+        # Build messages with conversation history
+        messages = []
+        
+        # Add conversation history if available
+        if session:
+            history = session.get_history(limit=6)  # Last 6 messages for context
+            for msg in history:
+                messages.append(msg)
+        
+        # Add system prompt
+        messages.insert(0, {
+            "role": "system",
+            "content": system_prompt
+        })
+        
+        # Add current user query with conciseness enforcement
+        # Check if this is a follow-up question (short query to existing context)
+        is_followup = len(user_query) < 50 and len(session.messages) > 2 if session else False
+        
+        if is_followup:
+            # For follow-ups, be EXTREMELY concise
+            user_content = f"""FOLLOW-UP QUESTION: {user_query}
+
+CRITICAL: This is a follow-up. Do NOT repeat information from previous messages.
+Answer with MAXIMUM 1-2 sentences. Be direct.
+
+Data context if needed:
+{context_for_llm}"""
+        else:
+            # For new queries, provide full context
+            user_content = f"""Analyze this shipment information and respond according to your professional guidelines:
 
 {context_for_llm}
 
 Customer Query: {user_query}
 
-Provide a professional, insightful response that:
-1. Summarizes the shipment status clearly
-2. Explains the timeline and any delays
-3. Assesses risk level 
-4. Provides specific next steps and recommendations
-5. Uses human-friendly language
-6. Never says "data not available" - infer from available information"""
-            }
-        ]
+RESPONSE RULES:
+1. Keep answer to 2-3 sentences MAXIMUM
+2. Answer only what was asked
+3. Use emoji for clarity: 📦=cargo, 📅=date, ⚠️=risk, 🚚=status
+4. Format: SHP-ID | SKU (qty) | Route | Status | Risk
+5. Never repeat previous context in same conversation
+6. Use data-driven insights only"""
+        
+        messages.append({
+            "role": "user",
+            "content": user_content
+        })
         
         # USE GROQ
         if config_manager.use_grok:
             from ai_providers_groq import call_groq_api
-            return call_groq_api(config_manager.grok_api_key, messages, system_prompt, user_query)
+            response = call_groq_api(config_manager.grok_api_key, messages, system_prompt, user_query)
         
         # USE OPENAI
         else:
             from ai_providers_openai import call_openai_api
-            return call_openai_api(config_manager.openai_api_key, messages, user_query)
+            response = call_openai_api(config_manager.openai_api_key, messages, user_query)
+        
+        # Store in session history
+        if session:
+            session.add_message("user", user_query)
+            session.add_message("assistant", response)
+        
+        return response
         
     except Exception as e:
         error_msg = str(e)
@@ -446,22 +556,51 @@ Provide a professional, insightful response that:
         import traceback
         traceback.print_exc()
         # Use fallback for this query
-        return generate_expert_fallback_from_query(intent, query_result)
+        return generate_expert_fallback_from_query(intent, query_result, session=session, user_query=user_query)
 
 
-def generate_expert_fallback_from_query(intent: Optional[QueryIntent], query_result: Optional[QueryResult]) -> str:
+def generate_expert_fallback_from_query(intent: Optional[QueryIntent], query_result: Optional[QueryResult], session: Optional[ConversationSession] = None, user_query: Optional[str] = None) -> str:
     """Generate concise response answering exactly what user asked (no AI service)"""
     
     if intent is None or query_result is None:
         return "⚠️ Service temporarily unavailable."
     
     try:
+        # Check if this is a short follow-up question (hint: very short query + existing messages)
+        is_followup = user_query and len(user_query) < 50 and session and len(session.messages) > 2
+        
         # SHIPMENT DETAILS - Show enriched shipment data
         if intent.query_type == 'shipment_details' and query_result.data:
             try:
                 data = query_result.data[0]  # Already enriched from query_engine
                 
-                # Build response from enriched data
+                # For follow-ups like "source?", "what's the source?", return ONLY the requested info
+                if is_followup:
+                    query_lower = user_query.lower() if user_query else ""
+                    if 'source' in query_lower:
+                        source = data.get('source', 'Unknown')
+                        return source
+                    elif 'destination' in query_lower or 'dest' in query_lower:
+                        destination = data.get('destination', 'Unknown')
+                        return destination
+                    elif 'risk' in query_lower:
+                        risk_score = data.get('risk_score', 0)
+                        risk_level = 'HIGH' if risk_score > 0.7 else 'MEDIUM' if risk_score > 0.4 else 'LOW'
+                        risk_emoji = "🔴" if risk_score > 0.7 else "🟡" if risk_score > 0.4 else "🟢"
+                        return f"{risk_emoji} {risk_level}"
+                    elif 'sku' in query_lower:
+                        sku = data.get('sku', 'Unknown')
+                        qty = data.get('quantity', 0)
+                        return f"{sku} ({qty} units)"
+                    elif 'status' in query_lower:
+                        return data.get('status', 'Unknown')
+                    elif 'delay' in query_lower:
+                        delay_days = data.get('delay_days') or 0
+                        return f"{delay_days} days overdue" if delay_days > 0 else "On schedule"
+                    elif 'date' in query_lower or 'arrival' in query_lower:
+                        return f"Expected: {data.get('expected_arrival')} | Shipped: {data.get('shipped_date')}"
+                
+                # For full details, provide comprehensive response
                 response = f"**{data.get('shipment_id')}** - {data.get('status')}\n"
                 
                 # Use source/destination if available, otherwise use route
@@ -522,18 +661,38 @@ def format_response(ai_insights: str, query_result: QueryResult) -> str:
 @app.post("/chat")
 async def chat(request: ChatRequest):
     """
-    🤖 AI-Powered Supply Chain Copilot
+    🤖 AI-Powered Supply Chain Copilot with Session Management
     
     Process:
-    1. Detect user intent (SKU, Route, Delay, Location, etc.)
-    2. Execute structured query on CSV data
-    3. Use OpenAI to generate proactive insights
-    4. Return formatted response with recommendations
+    1. Get or create conversation session
+    2. Detect user intent (SKU, Route, Delay, Location, etc.)
+    3. Execute structured query on CSV data
+    4. Use AI to generate proactive insights with conversation context
+    5. Return formatted response with recommendations
+    6. Store conversation history for future context
+    
+    Request:
+    {
+        "query": "SHP-0000007 details",
+        "session_id": "optional-session-uuid"  // omit for new session
+    }
+    
+    Response:
+    {
+        "response": "...",
+        "session_id": "uuid",
+        "intent": "shipment_details",
+        "timestamp": "..."
+    }
     """
     user_query = request.query
     
     try:
         print(f"📥 User Query: {user_query}")
+        
+        # Step 0: Get or create conversation session
+        session = get_or_create_session(request.session_id)
+        print(f"📌 Session: {session.session_id} (messages: {len(session.messages)})")
         
         # Step 1: Detect intent
         intent = detect_intent(user_query)
@@ -547,14 +706,17 @@ async def chat(request: ChatRequest):
         
         print(f"✅ Query Result: {query_result.query_type}")
         
-        # Step 3: Generate AI-powered insights
-        ai_insights = generate_insights(user_query, intent, query_result)
+        # Step 3: Generate AI-powered insights WITH CONVERSATION CONTEXT
+        ai_insights = generate_insights(user_query, intent, query_result, session=session)
         
         # Step 4: Format response
+
         response_text = format_response(ai_insights, query_result)
         
         return {
             "response": response_text,
+            "session_id": session.session_id,
+            "message_count": len(session.messages),
             "intent": intent.query_type,
             "confidence": intent.confidence,
             "structured_data": {
@@ -571,14 +733,74 @@ async def chat(request: ChatRequest):
         print(f"❌ Error: {e}")
         traceback.print_exc()
         
+        # Get session for error response
+        session = get_or_create_session(request.session_id)
+        
         return {
             "response": f"⚠️ Error processing query: {str(e)}",
+            "session_id": session.session_id,
+            "message_count": len(session.messages),
             "intent": "error",
             "confidence": 0.0,
             "structured_data": None,
             "ai_powered": False,
             "timestamp": datetime.now().isoformat()
         }
+
+@app.get("/session/{session_id}")
+async def get_session(session_id: str):
+    """Get conversation history for a session"""
+    if session_id not in sessions:
+        raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
+    
+    session = sessions[session_id]
+    return {
+        "session_id": session.session_id,
+        "created_at": session.created_at.isoformat(),
+        "last_activity": session.last_activity.isoformat(),
+        "message_count": len(session.messages),
+        "messages": session.get_history(limit=50),  # Return last 50 messages
+        "context": session.context,
+        "ai_powered": True
+    }
+
+@app.post("/session/new")
+async def create_new_session():
+    """Create a new conversation session"""
+    session = get_or_create_session()
+    return {
+        "session_id": session.session_id,
+        "created_at": session.created_at.isoformat(),
+        "message": "New session created. Use this session_id in future /chat requests to maintain conversation context."
+    }
+
+@app.delete("/session/{session_id}")
+async def delete_session(session_id: str):
+    """Delete a conversation session"""
+    if session_id not in sessions:
+        raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
+    
+    del sessions[session_id]
+    return {
+        "message": f"Session {session_id} deleted",
+        "remaining_sessions": len(sessions)
+    }
+
+@app.get("/sessions")
+async def list_sessions():
+    """List all active sessions (admin endpoint)"""
+    return {
+        "total_sessions": len(sessions),
+        "sessions": [
+            {
+                "session_id": s.session_id,
+                "created_at": s.created_at.isoformat(),
+                "last_activity": s.last_activity.isoformat(),
+                "message_count": len(s.messages)
+            }
+            for s in sessions.values()
+        ]
+    }
 
 if __name__ == "__main__":
     import uvicorn
