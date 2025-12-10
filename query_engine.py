@@ -337,7 +337,7 @@ def get_route_delay_analysis(limit: int = 10, **kwargs) -> QueryResult:
             summary=f"Error: {str(e)}"
         )
 
-def get_orders_by_destination(limit: int = 10, **kwargs) -> QueryResult:
+def get_orders_by_destination(limit: int = 10, sort_order: str = 'descending', **kwargs) -> QueryResult:
     """Get shipment count by destination location"""
     try:
         df = load_csv()
@@ -349,15 +349,17 @@ def get_orders_by_destination(limit: int = 10, **kwargs) -> QueryResult:
             )
         
         dest_counts = df.groupby('destination_location').size().reset_index(name='shipment_count')
-        dest_counts = dest_counts.sort_values('shipment_count', ascending=False)
+        sort_ascending = sort_order == 'ascending'
+        dest_counts = dest_counts.sort_values('shipment_count', ascending=sort_ascending)
         
         top_destinations = dest_counts.head(limit).to_dict('records')
         
+        order_label = "fewest" if sort_ascending else "most"
         return QueryResult(
             query_type='orders_by_destination',
             result={'total_destinations': len(dest_counts)},
             data=top_destinations,
-            summary=f"Top {limit} destinations by shipment count"
+            summary=f"Top {limit} destinations by {order_label} shipment count"
         )
     except Exception as e:
         return QueryResult(

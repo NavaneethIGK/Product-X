@@ -10,6 +10,7 @@ from intent_detector import detect_intent, QueryIntent
 from query_engine import execute_query, QueryResult
 from ai_providers_openai import call_openai_api, get_openai_client
 from ai_providers_groq import call_groq_api
+from smart_query_engine import smart_parse_intent, execute_smart_query, format_for_response
 
 # Session management for conversation history
 class ConversationSession:
@@ -744,6 +745,88 @@ async def chat(request: ChatRequest):
             "confidence": 0.0,
             "structured_data": None,
             "ai_powered": False,
+            "timestamp": datetime.now().isoformat()
+        }
+
+@app.post("/chat/smart")
+async def chat_smart(request: ChatRequest):
+    """
+    🚀 SMART Query Endpoint - Intelligent Intent Detection + Data-Driven Responses
+    
+    Uses advanced intent detection and data-driven query execution:
+    - Automatically detects aggregation dimension (destination, source, SKU, route)
+    - Intelligently interprets sort order (most vs least/fewest)
+    - Returns ranked, properly formatted results
+    - No manual pattern matching - works with any query structure
+    
+    Request:
+    {
+        "query": "which destination has less shipment",
+        "session_id": "optional-session-uuid"
+    }
+    
+    Response:
+    {
+        "response": "Destinations with fewest shipments (top 10): ...",
+        "session_id": "uuid",
+        "structured_data": {...},
+        "timestamp": "..."
+    }
+    """
+    user_query = request.query
+    
+    try:
+        print(f"\n🚀 SMART CHAT: {user_query}")
+        
+        # Get or create session
+        session = get_or_create_session(request.session_id)
+        session.add_message("user", user_query)
+        
+        # Step 1: Parse intent intelligently
+        intent = smart_parse_intent(user_query)
+        print(f"🧠 Smart Intent: {intent.aggregation.value} | Sort: {intent.sort_order.value} | Limit: {intent.limit}")
+        
+        # Step 2: Execute smart query
+        query_result = execute_smart_query(intent)
+        print(f"✅ Query Result: {query_result.get('summary', 'Success')}")
+        
+        # Step 3: Format response
+        response_text = format_for_response(query_result)
+        
+        # Store in session
+        session.add_message("assistant", response_text)
+        
+        return {
+            "response": response_text,
+            "session_id": session.session_id,
+            "message_count": len(session.messages),
+            "smart_query": True,
+            "intent": {
+                "aggregation": intent.aggregation.value,
+                "sort_order": intent.sort_order.value,
+                "limit": intent.limit,
+                "confidence": intent.confidence
+            },
+            "structured_data": {
+                "summary": query_result.get("summary"),
+                "data": query_result.get("data", [])[:10],
+                "total_unique": query_result.get("total_unique")
+            },
+            "timestamp": datetime.now().isoformat()
+        }
+    
+    except Exception as e:
+        import traceback
+        print(f"❌ Smart Chat Error: {e}")
+        traceback.print_exc()
+        
+        session = get_or_create_session(request.session_id)
+        
+        return {
+            "response": f"⚠️ Error: {str(e)}",
+            "session_id": session.session_id,
+            "smart_query": True,
+            "error": str(e),
             "timestamp": datetime.now().isoformat()
         }
 
