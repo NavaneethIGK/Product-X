@@ -4,6 +4,9 @@
 venv/
 backend_venv/
 
+# Vite build cache
+.vite/
+
 # Ignore Qodo folder
 .qodo/
 
