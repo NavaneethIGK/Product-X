@@ -5,7 +5,8 @@ import json
 import os
 
 # Load the 1M shipment dataset
-csv_path = r'C:\Projects\Prototypes\Product X\shipment_data_1M.csv'
+script_dir = os.path.dirname(os.path.abspath(__file__))
+csv_path = os.path.join(script_dir, 'shipment_data_1M.csv')
 print(f"Loading CSV from {csv_path}...")
 df = pd.read_csv(csv_path)
 

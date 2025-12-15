@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 import random
+import os
 
 # Number of rows
 n = 1_000_000
@@ -60,7 +61,8 @@ df = pd.DataFrame({
 })
 
 # Save file
-filepath = r"C:\Projects\Prototypes\Product X\shipment_data_1M.csv"
+script_dir = os.path.dirname(os.path.abspath(__file__))
+filepath = os.path.join(script_dir, "shipment_data_1M.csv")
 df.to_csv(filepath, index=False)
 
 print(f"Dataset saved to: {filepath}")

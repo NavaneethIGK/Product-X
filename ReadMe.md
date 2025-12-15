@@ -93,12 +93,18 @@ Conversational interface for supply chain analytics:
 - **Generative Insights**: "How can we improve?", "What are the bottlenecks?"
 - **NLP → SQL Pipeline**: Converts natural language to data queries
 - **Real-time Analysis**: Instant answers from 1M shipment dataset
+- **Smart Aggregations**: Intelligent detection of "most" vs "least" queries ⭐ NEW
+- **Location Filtering**: Get detailed stats for specific destinations ⭐ NEW
 
 **Example Questions:**
 - "How many SKUs do we have?" → Returns: 500 unique SKUs
 - "Which SKU have more shipments?" → Returns: Top 10 SKUs by order count
+- **"How many shipments to US-LAX?"** → Returns: 150,250 with breakdown ⭐ NEW
+- **"Orders from IN-DEL"** → Returns: Count, status breakdown, destinations ⭐ NEW
 - "What's causing delays?" → Returns: Analysis of problematic routes/SKUs
 - "How can we reduce delays?" → Returns: Actionable recommendations
+- **"Which destination has less shipment?"** → Returns: Ranked destinations by least shipments ⭐ NEW
+- **"Show 5 sources with fewest shipments"** → Returns: Top 5 sources, ranked ⭐ NEW
 
 ### 📊 AI Predictions
 Advanced analytics dashboard with:
@@ -118,25 +124,40 @@ Advanced analytics dashboard with:
 
 ## 🏗️ Architecture
 
+### Smart Query Engine ⭐ NEW
+Intelligent, data-driven query system that automatically:
+- ✅ Detects aggregation dimensions (destination, source, SKU, route, status)
+- ✅ Recognizes sort direction ("least" vs "most")
+- ✅ Returns properly ranked results
+- ✅ Works with ANY query structure (no manual patterns needed)
+
+**Example:** "Which destination has less shipment?"
+- Old System: Returns unranked list with all destinations showing "1 shipment"
+- New System: Returns ranked list from fewest to most shipments
+
+See `SMART_QUERY_GUIDE.md` for detailed documentation.
+
 ### Request Flow
 
 \`\`\`
 User Query
     ↓
-Intent Detection (NLP)
+Smart Intent Detection (Keyword Analysis)
     ↓
-Query Type Identification
+Aggregation Type & Sort Direction Detected
     ↓
 SQL-like Execution on CSV
     ↓
-Data Aggregation
+Data Aggregation + Ranking
     ↓
-LLM Summarization
+Formatted Response
     ↓
-Markdown Response
+Optional: LLM Enrichment
+    ↓
+Response to User
 \`\`\`
 
-### Query Types (9 Types)
+### Query Types (9 Types + Smart Aggregations)
 
 | Query Type | Example | Response |
 |-----------|---------|----------|
@@ -159,7 +180,16 @@ Product-X/
 ├── copilot_backend.py          # FastAPI backend
 ├── query_engine.py             # SQL-like query handlers
 ├── intent_detector.py          # NLP intent recognition
+├── smart_query_engine.py       # ⭐ NEW: Intelligent data-driven queries
+├── data_enrichment.py          # Data transformation layer
+├── ai_providers_groq.py        # Groq AI integration
+├── ai_providers_openai.py      # OpenAI integration
+├── shipment_data_1M.csv        # 1M shipment records
 ├── requirements.txt            # Python dependencies
+│
+├── SMART_QUERY_GUIDE.md        # ⭐ NEW: Complete smart query documentation
+├── SOLUTION_SUMMARY.md         # ⭐ NEW: Implementation details
+├── CHATBOT_FIXES.md            # Bug fixes and improvements
 │
 └── product-x-dashboard/        # React frontend
     ├── src/
@@ -182,7 +212,49 @@ Product-X/
 
 ## 🔌 API Endpoints
 
-### Chat Endpoint
+### Smart Chat Endpoint ⭐ NEW
+\`\`\`http
+POST /chat/smart
+Content-Type: application/json
+
+{
+  "query": "Which destination has less shipment?"
+}
+\`\`\`
+
+**Response:**
+\`\`\`json
+{
+  "response": "📊 Destinations with fewest shipments (top 10):\n  1. UK-LON (1 shipment, 50 units)\n  2. DE-FRA (2 shipments, 100 units)\n  ...",
+  "session_id": "uuid",
+  "smart_query": true,
+  "intent": {
+    "aggregation": "destination",
+    "sort_order": "ascending",
+    "limit": 10,
+    "confidence": 0.95
+  },
+  "structured_data": {
+    "summary": "Destinations with fewest shipments (top 10)",
+    "data": [
+      {"destination": "UK-LON", "shipment_count": 1, "total_quantity": 50},
+      {"destination": "DE-FRA", "shipment_count": 2, "total_quantity": 100}
+    ],
+    "total_unique": 8
+  }
+}
+\`\`\`
+
+**Supported Queries:**
+- "which destination has less shipment" → Ranked by fewest shipments
+- "top sources by shipment count" → Ranked by most shipments
+- "show 5 SKUs with fewest orders" → Top 5 SKUs with least volume
+- "slowest routes" → Routes ranked by least shipments
+- "busiest corridors" → Routes ranked by most shipments
+
+---
+
+### Chat Endpoint (Original)
 \`\`\`http
 POST /chat
 Content-Type: application/json

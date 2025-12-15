@@ -19,20 +19,20 @@ class QueryResult:
 _csv_data = None
 
 def find_csv():
-    """Find CSV file in multiple locations"""
-    possible_paths = [
-        'shipment_data_1M.csv',
-        'shipment_data.csv',
-        './shipment_data_1M.csv',
-        './shipment_data.csv',
-    ]
+    """Find CSV file in the same directory as this script"""
+    # Get the directory where this script is located
+    script_dir = os.path.dirname(os.path.abspath(__file__))
     
-    for path in possible_paths:
-        if os.path.exists(path):
-            print(f"[OK] Found CSV at: {path}")
-            return path
+    # CSV file names to search for
+    csv_filenames = ['shipment_data_1M.csv', 'shipment_data.csv']
     
-    print(f"[ERROR] CSV not found. Tried: {possible_paths}")
+    for filename in csv_filenames:
+        csv_path = os.path.join(script_dir, filename)
+        if os.path.exists(csv_path):
+            print(f"[OK] Found CSV at: {csv_path}")
+            return csv_path
+    
+    print(f"[ERROR] CSV not found in {script_dir}. Looked for: {csv_filenames}")
     return None
 
 def load_csv() -> pd.DataFrame:
@@ -147,7 +147,7 @@ def get_top_routes(limit: int = 10, **kwargs) -> QueryResult:
         )
 
 def get_delayed_shipments(limit: int = 10, **kwargs) -> QueryResult:
-    """Get delayed shipments"""
+    """Get delayed shipments (including overdue in-transit)"""
     try:
         df = load_csv()
         if df.empty:
@@ -160,18 +160,34 @@ def get_delayed_shipments(limit: int = 10, **kwargs) -> QueryResult:
         df['expected_arrival'] = pd.to_datetime(df['expected_arrival'], errors='coerce')
         df['arrived_at'] = pd.to_datetime(df['arrived_at'], errors='coerce')
         
+        delayed_list = []
+        now = pd.Timestamp.now()
+        
+        # 1. ARRIVED but late
         arrived = df[df['status'] == 'ARRIVED'].copy()
         arrived.loc[:, 'delay_days'] = (arrived['arrived_at'] - arrived['expected_arrival']).dt.days
+        delayed_arrived = arrived[arrived['delay_days'] > 0][['shipment_id', 'sku', 'status', 'delay_days']]
+        delayed_list.append(delayed_arrived)
         
-        delayed = arrived[arrived['delay_days'] > 0].nlargest(limit, 'delay_days')
+        # 2. IN_TRANSIT but overdue (expected date has passed)
+        in_transit = df[df['status'] == 'IN_TRANSIT'].copy()
+        in_transit.loc[:, 'delay_days'] = (now - in_transit['expected_arrival']).dt.days
+        delayed_in_transit = in_transit[in_transit['delay_days'] > 0][['shipment_id', 'sku', 'status', 'delay_days']]
+        delayed_list.append(delayed_in_transit)
         
-        delayed_data = delayed[['shipment_id', 'sku', 'status', 'delay_days']].to_dict('records')
+        # Combine and sort by delay_days
+        if delayed_list:
+            delayed = pd.concat(delayed_list, ignore_index=True)
+            delayed = delayed.nlargest(limit, 'delay_days')
+            delayed_data = delayed.to_dict('records')
+        else:
+            delayed_data = []
         
         return QueryResult(
             query_type='delayed_shipments',
-            result={'total_delayed': len(delayed)},
+            result={'total_delayed': len(delayed_data)},
             data=delayed_data,
-            summary=f"Found {len(delayed)} delayed shipments"
+            summary=f"Found {len(delayed_data)} delayed shipments"
         )
     except Exception as e:
         return QueryResult(
@@ -321,7 +337,7 @@ def get_route_delay_analysis(limit: int = 10, **kwargs) -> QueryResult:
             summary=f"Error: {str(e)}"
         )
 
-def get_orders_by_destination(limit: int = 10, **kwargs) -> QueryResult:
+def get_orders_by_destination(limit: int = 10, sort_order: str = 'descending', **kwargs) -> QueryResult:
     """Get shipment count by destination location"""
     try:
         df = load_csv()
@@ -333,15 +349,17 @@ def get_orders_by_destination(limit: int = 10, **kwargs) -> QueryResult:
             )
         
         dest_counts = df.groupby('destination_location').size().reset_index(name='shipment_count')
-        dest_counts = dest_counts.sort_values('shipment_count', ascending=False)
+        sort_ascending = sort_order == 'ascending'
+        dest_counts = dest_counts.sort_values('shipment_count', ascending=sort_ascending)
         
         top_destinations = dest_counts.head(limit).to_dict('records')
         
+        order_label = "fewest" if sort_ascending else "most"
         return QueryResult(
             query_type='orders_by_destination',
             result={'total_destinations': len(dest_counts)},
             data=top_destinations,
-            summary=f"Top {limit} destinations by shipment count"
+            summary=f"Top {limit} destinations by {order_label} shipment count"
         )
     except Exception as e:
         return QueryResult(
@@ -499,6 +517,77 @@ We're actively enhancing our AI to understand this query better! Our model is be
 """
     )
 
+def get_shipment_details(shipment_id: str, **kwargs) -> QueryResult:
+    """Get details for a specific shipment using enrichment layer"""
+    try:
+        from data_enrichment import enrich_shipment
+        
+        df = load_csv()
+        if df.empty:
+            return QueryResult(
+                query_type='shipment_details',
+                error="No data available",
+                summary="No data available"
+            )
+        
+        # Normalize shipment_id for case-insensitive matching
+        normalized_id = shipment_id.strip().upper()
+        
+        # Try to find the shipment (handle both case-sensitive and case-insensitive)
+        shipment = df[df['shipment_id'].astype(str).str.strip().str.upper() == normalized_id]
+        
+        if shipment.empty:
+            return QueryResult(
+                query_type='shipment_details',
+                error=f"Shipment {shipment_id} not found",
+                summary=f"No shipment found with ID: {shipment_id}"
+            )
+        
+        # Use enrichment layer to transform raw data
+        enriched = enrich_shipment(shipment.iloc[0].to_dict())
+        
+        # Return as structured JSON (NOT raw CSV)
+        return QueryResult(
+            query_type='shipment_details',
+            result={
+                'shipment_id': enriched.shipment_id,
+                'sku': enriched.sku,
+                'quantity': enriched.quantity,
+                'status': enriched.status_label,
+                'health': enriched.shipment_health,
+                'risk_score': enriched.risk_score,
+            },
+            data=[{
+                'shipment_id': enriched.shipment_id,
+                'sku': enriched.sku,
+                'quantity': enriched.quantity,
+                'source': enriched.source,
+                'destination': enriched.destination,
+                'route': enriched.route,
+                'status': enriched.status_label,
+                'status_interpretation': enriched.status_interpretation,
+                'shipped_date': enriched.shipped_date,
+                'expected_arrival': enriched.expected_arrival,
+                'actual_arrival': enriched.actual_arrival,
+                'transit_days': enriched.transit_days,
+                'delay_days': enriched.delay_days,
+                'health': enriched.shipment_health,
+                'risk_score': enriched.risk_score,
+                'timeline_summary': enriched.timeline_summary,
+                'eta_forecast': enriched.eta_forecast,
+                'recommendations': enriched.recommendations,
+            }],
+            summary=f"Shipment {enriched.shipment_id}: {enriched.status_label}"
+        )
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return QueryResult(
+            query_type='shipment_details',
+            error=str(e),
+            summary=f"Error retrieving shipment details: {str(e)}"
+        )
+
 # Query dispatcher
 QUERY_HANDLERS = {
     'sku_count': get_sku_count,
@@ -511,6 +600,7 @@ QUERY_HANDLERS = {
     'orders_by_destination': get_orders_by_destination,
     'orders_by_source': get_orders_by_source,
     'generative_insights': get_generative_insights,
+    'shipment_details': get_shipment_details,
     'training_mode': get_training_mode
 }
 

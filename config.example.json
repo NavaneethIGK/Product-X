@@ -1,0 +1,17 @@
+{
+  "ai_provider": {
+    "provider": "groq",
+    "enabled": true,
+    "description": "Set to 'groq' or 'openai' to choose which AI service to use"
+  },
+  "openai": {
+    "enabled": false,
+    "api_key": "sk-proj-your-openai-api-key-here",
+    "description": "Set enabled=true and add your OpenAI API key to use OpenAI"
+  },
+  "groq": {
+    "enabled": true,
+    "api_key": "gsk-your-groq-api-key-here",
+    "description": "Set enabled=true and add your Groq API key to use Groq (recommended - free tier available)"
+  }
+}

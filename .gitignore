@@ -2,6 +2,7 @@
 # Ignore local virtual environment
 .venv/
 venv/
+backend_venv/
 
 # Ignore Qodo folder
 .qodo/
@@ -17,3 +18,20 @@ __pycache__/
 
 # VS Code settings (optional)
 .vscode/
+
+# SECURITY: Never commit API keys or secrets
+.env
+.env.local
+.env.*.local
+config.json
+config.local.json
+
+# IDE
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
