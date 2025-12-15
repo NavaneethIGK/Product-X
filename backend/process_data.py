@@ -98,7 +98,10 @@ models = {
     'sku_delays': sku_stats.head(20).to_dict(orient='index')
 }
 
-output_path = r'C:\Projects\Prototypes\Product X\product-x-dashboard\public\models.json'
+# Save to frontend/public (monorepo structure)
+BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(BACKEND_DIR)
+output_path = os.path.join(ROOT_DIR, 'frontend', 'public', 'models.json')
 os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
 with open(output_path, 'w') as f:

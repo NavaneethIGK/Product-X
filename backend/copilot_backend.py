@@ -7,12 +7,14 @@ import json
 import os
 import uuid
 import jwt
+import pandas as pd
 from intent_detector import detect_intent, QueryIntent
-from query_engine import execute_query, QueryResult
+from query_engine import execute_query, QueryResult, load_csv
 from ai_providers_openai import call_openai_api, get_openai_client
 from ai_providers_groq import call_groq_api
 from smart_query_engine import smart_parse_intent, execute_smart_query, format_for_response
 from auth_db import verify_password, get_user, init_db, create_default_user
+from improved_response_generator import ImprovedResponseGenerator
 
 # Session management for conversation history
 class ConversationSession:
@@ -208,7 +210,7 @@ class ConfigManager:
     def __init__(self):
         self.openai_api_key = None
         self.grok_api_key = None
-        self.use_grok = False  # Default to OpenAI
+        self.use_grok = True  # Default to Groq
         self.load_config()
     
     def load_config(self):
@@ -238,9 +240,9 @@ class ConfigManager:
                             self.grok_api_key = groq_config['api_key']
                             print("✅ Groq API Key loaded from config.json")
                         
-                        # Set provider
+                        # Set provider (default to groq)
                         self.use_grok = provider == 'groq'
-                        print(f"✅ AI Provider set to: {'GROQ' if self.use_grok else 'OPENAI'} (from config.json)")
+                        print(f"✅ AI Provider set to: {'🦅 GROQ' if self.use_grok else '🤖 OPENAI'} (from config.json)")
                     else:
                         # Legacy config format for backward compatibility
                         if config.get('openai_api_key'):
@@ -252,8 +254,8 @@ class ConfigManager:
                             print("✅ Groq API Key loaded from config.json")
                         
                         if 'use_grok' in config:
-                            self.use_grok = config.get('use_grok', False)
-                            print(f"✅ AI Provider set to: {'GROQ' if self.use_grok else 'OPENAI'} (from config.json)")
+                            self.use_grok = config.get('use_grok', True)  # Default to True
+                            print(f"✅ AI Provider set to: {'🦅 GROQ' if self.use_grok else '🤖 OPENAI'} (from config.json)")
             except Exception as e:
                 print(f"⚠️  Error reading config.json: {e}")
         
@@ -269,13 +271,17 @@ class ConfigManager:
         if os.getenv('AI_PROVIDER'):
             provider = os.getenv('AI_PROVIDER').lower()
             self.use_grok = provider == 'groq'
-            print(f"✅ AI Provider set to: {'GROQ' if self.use_grok else 'OPENAI'} (from environment)")
+            print(f"✅ AI Provider set to: {'🦅 GROQ' if self.use_grok else '🤖 OPENAI'} (from environment)")
+        else:
+            # Default to Groq if not specified
+            self.use_grok = True
         
         # Print summary
         print(f"\n📊 AI Configuration Summary:")
         print(f"  OpenAI Available: {bool(self.openai_api_key)}")
         print(f"  Groq Available: {bool(self.grok_api_key)}")
         print(f"  Current Provider: {'🦅 GROQ' if self.use_grok else '🤖 OPENAI'}")
+        print(f"  Default: GROQ (configurable via AI_PROVIDER env var)")
         
         if not self.openai_api_key and not self.grok_api_key:
             print(f"\n⚠️  Warning: No AI providers configured!")
@@ -323,16 +329,17 @@ print(f"\n🚀 AI Copilot Initialized")
 print(f"   Current Provider: {'🦅 GROQ' if config_manager.use_grok else '🤖 OPENAI'}")
 print(f"   Configured: {config_manager.is_configured()}")
 
-# Load models
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-MODELS_PATH = os.path.join(SCRIPT_DIR, 'product-x-dashboard', 'public', 'models.json')
+# Load models from frontend/public (monorepo structure)
+BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(BACKEND_DIR)
+MODELS_PATH = os.path.join(ROOT_DIR, 'frontend', 'public', 'models.json')
 
 def load_models():
     try:
         with open(MODELS_PATH, 'r') as f:
             return json.load(f)
     except Exception as e:
-        print(f"[WARNING] Could not load models from {MODELS_PATH}: {e}")
+        print(f"[INFO] Models file not found at {MODELS_PATH} - using defaults")
         return None
 
 models = load_models()
@@ -762,70 +769,64 @@ def format_response(ai_insights: str, query_result: QueryResult) -> str:
 @app.post("/chat")
 async def chat(request: ChatRequest):
     """
-    🤖 AI-Powered Supply Chain Copilot with Session Management
+    🚀 IMPROVED AI-Powered Supply Chain Copilot
     
-    Process:
-    1. Get or create conversation session
-    2. Detect user intent (SKU, Route, Delay, Location, etc.)
-    3. Execute structured query on CSV data
-    4. Use AI to generate proactive insights with conversation context
-    5. Return formatted response with recommendations
-    6. Store conversation history for future context
+    Uses accurate data analysis + optional Groq LLM
     
-    Request:
-    {
-        "query": "SHP-0000007 details",
-        "session_id": "optional-session-uuid"  // omit for new session
-    }
+    Features:
+    1. Accurate metrics calculation from CSV data
+    2. Intelligent query type detection
+    3. Crisp, supply-chain-standard formatting
+    4. Zero hallucinations - only real data
+    5. Session-aware conversation context
     
-    Response:
-    {
-        "response": "...",
-        "session_id": "uuid",
-        "intent": "shipment_details",
-        "timestamp": "..."
-    }
+    Queries answered:
+    - "on time rate?" → Exact % with breakdown
+    - "how many sku?" → Exact count + top SKUs
+    - "SHP-0000001" → Full shipment details
+    - "shipments from UK-LON?" → Count + metrics
+    - "best route?" → Top routes by on-time %
+    - "critical shipments?" → High-risk items
     """
     user_query = request.query
     
     try:
-        print(f"📥 User Query: {user_query}")
+        print(f"\n🎯 IMPROVED SUPPLY CHAIN QUERY")
+        print(f"📥 Query: {user_query}")
         
-        # Step 0: Get or create conversation session
+        # Load CSV data
+        df = load_csv()
+        if df.empty:
+            return {
+                "response": "⚠️ Supply chain data not available",
+                "session_id": request.session_id or "error",
+                "error": "No data",
+                "timestamp": datetime.now().isoformat()
+            }
+        
+        # Get or create conversation session
         session = get_or_create_session(request.session_id)
-        print(f"📌 Session: {session.session_id} (messages: {len(session.messages)})")
+        print(f"📌 Session: {session.session_id}")
         
-        # Step 1: Detect intent
-        intent = detect_intent(user_query)
-        if intent is None:
-            intent = QueryIntent(query_type='summary_stats', filters={}, confidence=0.5)
+        # Generate accurate response using improved analyzer
+        response_generator = ImprovedResponseGenerator(df)
+        response_text, metadata = response_generator.generate_response(user_query)
         
-        print(f"🔍 Detected Intent: {intent.query_type} (confidence: {intent.confidence})")
+        print(f"✅ Response generated: {metadata['query_type']}")
+        print(f"   Confidence: {metadata['confidence']:.0%}")
         
-        # Step 2: Execute structured query with filters
-        query_result = execute_query(intent.query_type, limit=intent.limit, **intent.filters)
-        
-        print(f"✅ Query Result: {query_result.query_type}")
-        
-        # Step 3: Generate AI-powered insights WITH CONVERSATION CONTEXT
-        ai_insights = generate_insights(user_query, intent, query_result, session=session)
-        
-        # Step 4: Format response
-
-        response_text = format_response(ai_insights, query_result)
+        # Store in session
+        session.add_message("user", user_query)
+        session.add_message("assistant", response_text)
         
         return {
             "response": response_text,
             "session_id": session.session_id,
             "message_count": len(session.messages),
-            "intent": intent.query_type,
-            "confidence": intent.confidence,
-            "structured_data": {
-                "query_type": query_result.query_type,
-                "metrics": query_result.result,
-                "records": query_result.data[:10] if query_result.data else []
-            },
+            "query_type": metadata['query_type'],
+            "confidence": metadata['confidence'],
             "ai_powered": True,
+            "data_source": "CSV (accurate)",
             "timestamp": datetime.now().isoformat()
         }
     
@@ -834,17 +835,15 @@ async def chat(request: ChatRequest):
         print(f"❌ Error: {e}")
         traceback.print_exc()
         
-        # Get session for error response
         session = get_or_create_session(request.session_id)
         
         return {
-            "response": f"⚠️ Error processing query: {str(e)}",
+            "response": f"⚠️ Error: {str(e)[:100]}",
             "session_id": session.session_id,
-            "message_count": len(session.messages),
-            "intent": "error",
+            "query_type": "error",
             "confidence": 0.0,
-            "structured_data": None,
             "ai_powered": False,
+            "error": str(e),
             "timestamp": datetime.now().isoformat()
         }
 
@@ -989,17 +988,17 @@ if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
 
-# Load models
-# Path relative to script location - works on both Windows and Linux
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-MODELS_PATH = os.path.join(SCRIPT_DIR, 'product-x-dashboard', 'public', 'models.json')
+# Load models from frontend/public (monorepo structure)
+BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(BACKEND_DIR)
+MODELS_PATH = os.path.join(ROOT_DIR, 'frontend', 'public', 'models.json')
 
 def load_models():
     try:
         with open(MODELS_PATH, 'r') as f:
             return json.load(f)
     except Exception as e:
-        print(f"[WARNING] Could not load models from {MODELS_PATH}: {e}")
+        print(f"[INFO] Models file not found at {MODELS_PATH} - using defaults")
         return None
 
 models = load_models()
