@@ -1,5 +1,5 @@
 import React from 'react'
-import { Link as RouterLink, useLocation } from 'react-router-dom'
+import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import List from '@mui/material/List'
 import ListItem from '@mui/material/ListItem'
@@ -7,18 +7,27 @@ import ListItemButton from '@mui/material/ListItemButton'
 import ListItemIcon from '@mui/material/ListItemIcon'
 import ListItemText from '@mui/material/ListItemText'
 import Typography from '@mui/material/Typography'
-import TrendingUpIcon from '@mui/icons-material/TrendingUp'
+import Button from '@mui/material/Button'
 import SmartToyIcon from '@mui/icons-material/SmartToy'
+import LogoutIcon from '@mui/icons-material/Logout'
 
 export default function Sidebar() {
   const location = useLocation()
+  const navigate = useNavigate()
+  const userEmail = localStorage.getItem('user_email') || 'User'
   
   const menuItems = [
-    { label: 'AI Predictions', icon: <TrendingUpIcon />, path: '/predictions' },
     { label: 'AI Copilot', icon: <SmartToyIcon />, path: '/ai-copilot' }
   ]
 
-  const isActive = (path: string) => location.pathname === path || (path === '/predictions' && location.pathname === '/')
+  const isActive = (path: string) => location.pathname === path || (path === '/ai-copilot' && location.pathname === '/')
+
+  const handleLogout = () => {
+    localStorage.removeItem('auth_token')
+    localStorage.removeItem('user_email')
+    localStorage.removeItem('copilot_session_id')
+    navigate('/login')
+  }
 
   return (
     <Box 
@@ -120,13 +129,53 @@ export default function Sidebar() {
         })}
       </List>
 
-      {/* Footer Info */}
+      {/* User Info & Logout */}
       <Box sx={{ 
         p: 2.5, 
         borderTop: '2px solid #e8eef8',
         bgcolor: '#f5f7fb',
         m: 2,
-        borderRadius: '12px',
+        borderRadius: '12px'
+      }}>
+        <Typography variant="caption" sx={{ color: '#667eea', fontWeight: 700, display: 'block', mb: 1 }}>
+          👤 Logged In
+        </Typography>
+        <Typography 
+          variant="caption" 
+          sx={{ 
+            color: '#1a1a2e', 
+            fontWeight: 600, 
+            fontSize: '0.85rem',
+            display: 'block',
+            mb: 2,
+            wordBreak: 'break-word'
+          }}
+        >
+          {userEmail}
+        </Typography>
+        <Button
+          fullWidth
+          startIcon={<LogoutIcon />}
+          onClick={handleLogout}
+          sx={{
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            color: 'white',
+            fontWeight: 700,
+            py: 1,
+            borderRadius: '8px',
+            textTransform: 'none',
+            '&:hover': {
+              boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)',
+            }
+          }}
+        >
+          Logout
+        </Button>
+      </Box>
+
+      {/* Footer Info */}
+      <Box sx={{ 
+        p: 2.5, 
         textAlign: 'center'
       }}>
         <Typography variant="caption" sx={{ color: '#667eea', fontWeight: 700, display: 'block', mb: 1 }}>

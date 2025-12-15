@@ -1,16 +1,18 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 import os
 import uuid
+import jwt
 from intent_detector import detect_intent, QueryIntent
 from query_engine import execute_query, QueryResult
 from ai_providers_openai import call_openai_api, get_openai_client
 from ai_providers_groq import call_groq_api
 from smart_query_engine import smart_parse_intent, execute_smart_query, format_for_response
+from auth_db import verify_password, get_user, init_db, create_default_user
 
 # Session management for conversation history
 class ConversationSession:
@@ -76,6 +78,63 @@ RESPONSE STYLE:
 # Global session storage (in production, use Redis or database)
 sessions: Dict[str, ConversationSession] = {}
 
+# ============================================================================
+# AUTHENTICATION SETUP
+# ============================================================================
+
+JWT_SECRET = os.getenv("JWT_SECRET", "your-secret-key-change-in-production")
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRATION_HOURS = 24
+
+# Pydantic models for auth
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str
+    user_email: str
+
+class TokenData(BaseModel):
+    email: Optional[str] = None
+
+# Initialize auth DB
+init_db()
+create_default_user()
+
+def create_access_token(email: str) -> str:
+    """Create JWT token for user"""
+    payload = {
+        "email": email,
+        "exp": datetime.utcnow() + timedelta(hours=JWT_EXPIRATION_HOURS)
+    }
+    token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    return token
+
+def verify_token(token: str) -> Optional[str]:
+    """Verify JWT token and return email"""
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        email = payload.get("email")
+        return email
+    except jwt.ExpiredSignatureError:
+        return None
+    except jwt.InvalidTokenError:
+        return None
+
+def get_current_user(token: Optional[str] = None) -> str:
+    """Dependency to verify token from Authorization header"""
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    email = verify_token(token)
+    if not email:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    
+    return email
+
+
 def get_or_create_session(session_id: Optional[str] = None) -> ConversationSession:
     """Get existing session or create new one"""
     if not session_id or session_id not in sessions:
@@ -103,7 +162,48 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ============================================================================
+# AUTHENTICATION ENDPOINTS
+# ============================================================================
+
+@app.post("/auth/login", response_model=LoginResponse)
+async def login(request: LoginRequest):
+    """Login with email and password, return JWT token"""
+    email = request.email
+    password = request.password
+    
+    # Verify credentials
+    if not verify_password(email, password):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    
+    # Create JWT token
+    token = create_access_token(email)
+    
+    return LoginResponse(
+        access_token=token,
+        token_type="bearer",
+        user_email=email
+    )
+
+@app.post("/auth/logout")
+async def logout():
+    """Logout endpoint (token invalidation handled on frontend)"""
+    return {"message": "Logged out successfully"}
+
+@app.get("/auth/verify")
+async def verify_auth(token: Optional[str] = None):
+    """Verify if token is valid"""
+    if not token:
+        raise HTTPException(status_code=401, detail="No token provided")
+    
+    email = verify_token(token)
+    if not email:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    
+    return {"email": email, "valid": True}
+
 # Configuration system for OpenAI & Groq API Keys
+
 class ConfigManager:
     def __init__(self):
         self.openai_api_key = None
