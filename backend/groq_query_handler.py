@@ -161,36 +161,49 @@ class GroqPoweredQueryHandler:
     def _build_groq_prompt_with_all_reasoning(self, user_query: str, context_data: Dict[str, Any]) -> str:
         """Build comprehensive prompt for Groq LLM to handle ALL reasoning"""
         
+        # Calculate key percentages
+        total_shipments = context_data['total_shipments']
+        arrived = context_data['on_time_metrics']['total_arrived']
+        in_transit = context_data['on_time_metrics']['status_breakdown']['in_transit']
+        arrived_pct = (arrived / total_shipments * 100) if total_shipments > 0 else 0
+        in_transit_pct = (in_transit / total_shipments * 100) if total_shipments > 0 else 0
+        
         # Prepare all data in a structured format for Groq to understand
         context_str = f"""
-SUPPLY CHAIN DATABASE CONTENTS:
-Total Records: {context_data['total_shipments']:,} shipments
-Time Period: Full dataset
+SUPPLY CHAIN DATABASE - COMPLETE DATA SUMMARY:
+==============================================
+Total Shipment Records: {total_shipments:,} (100%)
 
-KEY METRICS:
-On-Time Delivery: {context_data['on_time_metrics']['on_time_rate']}% of arrived shipments
-Arrived Shipments: {context_data['on_time_metrics']['total_arrived']:,}
-In-Transit Shipments: {context_data['on_time_metrics']['status_breakdown']['in_transit']:,}
-Late/Delayed Shipments: {context_data['on_time_metrics']['late_count']:,}
+SHIPMENT STATUS BREAKDOWN (out of {total_shipments:,} total):
+- ARRIVED: {arrived:,} shipments ({arrived_pct:.1f}%)
+  * On-Time: {context_data['on_time_metrics']['on_time_count']:,} shipments ({context_data['on_time_metrics']['on_time_rate']}%)
+  * Late/Delayed: {context_data['on_time_metrics']['late_count']:,} shipments
+- IN-TRANSIT: {in_transit:,} shipments ({in_transit_pct:.1f}%)
+
+KEY PERFORMANCE METRICS:
+- Overall On-Time Delivery Rate (arrived only): {context_data['on_time_metrics']['on_time_rate']}%
+- Average Delay (late shipments): {context_data['on_time_metrics']['late_days_avg']} days
 
 LOCATIONS IN DATABASE:
-Source Locations: {context_data['location_metrics']['unique_source_locations']}
-Destination Locations: {context_data['location_metrics']['unique_destination_locations']}
+- Source Locations: {context_data['location_metrics']['unique_source_locations']}
+- Destination Locations: {context_data['location_metrics']['unique_destination_locations']}
 
-DESTINATION LOCATION SHIPMENT BREAKDOWN:
+DESTINATION LOCATION SHIPMENT BREAKDOWN (out of {total_shipments:,} total):
 """
         for dest in context_data['destination_metrics']['destinations']:
-            context_str += f"- {dest['location']}: {dest['shipment_count']:,} shipments, {dest['total_units']:,} units, {dest['on_time_rate']}% on-time rate\n"
+            dest_pct = (dest['shipment_count'] / total_shipments * 100)
+            context_str += f"- {dest['location']}: {dest['shipment_count']:,} shipments ({dest_pct:.1f}%), {dest['total_units']:,} units, {dest['on_time_rate']}% on-time rate\n"
         
         context_str += f"""
-PRODUCTS:
-Unique SKUs: {context_data['sku_metrics']['total_skus']}
-Total Units: {context_data['sku_metrics']['total_units']:,}
+PRODUCTS CATALOG:
+- Unique SKUs: {context_data['sku_metrics']['total_skus']}
+- Total Units Shipped: {context_data['sku_metrics']['total_units']:,}
 
-TOP SKUs:
+TOP 5 SKUs BY VOLUME:
 """
         for i, sku_info in enumerate(context_data['sku_metrics']['top_5_skus'], 1):
-            context_str += f"{i}. {sku_info['sku']}: {sku_info['total_units']:,} units\n"
+            sku_pct = (sku_info['total_units'] / context_data['sku_metrics']['total_units'] * 100)
+            context_str += f"{i}. {sku_info['sku']}: {sku_info['total_units']:,} units ({sku_pct:.1f}% of total volume)\n"
         
         # Add sample shipments if available (for shipment detail queries)
         if context_data.get('sample_shipments'):
