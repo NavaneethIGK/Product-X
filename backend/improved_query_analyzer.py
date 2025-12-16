@@ -23,40 +23,35 @@ class ImprovedQueryAnalyzer:
         for col in date_cols:
             if col in self.df.columns:
                 self.df[col] = pd.to_datetime(self.df[col], errors='coerce')
-        
-        # Normalize status to uppercase for consistency
-        if 'status' in self.df.columns:
-            self.df['status'] = self.df['status'].str.upper()
     
     # ========== CORE METRICS ==========
     
     def get_on_time_rate(self) -> Dict[str, Any]:
         """Calculate accurate on-time delivery rate"""
         
-        # Only count delivered shipments for on-time calculation
-        delivered = self.df[self.df['status'] == 'DELIVERED'].copy()
+        # Only count arrived shipments for on-time calculation
+        arrived = self.df[self.df['status'] == 'ARRIVED'].copy()
         
-        if len(delivered) == 0:
+        if len(arrived) == 0:
             return {
                 'on_time_rate': 0.0,
                 'on_time_count': 0,
-                'total_delivered': 0,
-                'delayed_count': 0,
+                'total_arrived': 0,
+                'late_count': 0,
                 'late_days_avg': 0,
                 'status_breakdown': {
-                    'delivered': 0,
-                    'delayed': 0,
+                    'arrived': 0,
                     'in_transit': 0
                 }
             }
         
         # Calculate on-time (arrived_at <= expected_arrival)
-        delivered['is_on_time'] = delivered['arrived_at'] <= delivered['expected_arrival']
-        on_time_count = delivered['is_on_time'].sum()
-        on_time_rate = (on_time_count / len(delivered) * 100) if len(delivered) > 0 else 0
+        arrived['is_on_time'] = arrived['arrived_at'] <= arrived['expected_arrival']
+        on_time_count = arrived['is_on_time'].sum()
+        on_time_rate = (on_time_count / len(arrived) * 100) if len(arrived) > 0 else 0
         
         # Calculate average delay for late shipments
-        late = delivered[~delivered['is_on_time']]
+        late = arrived[~arrived['is_on_time']].copy()
         if len(late) > 0:
             late['delay_days'] = (late['arrived_at'] - late['expected_arrival']).dt.days
             late_days_avg = late['delay_days'].mean()
@@ -66,12 +61,11 @@ class ImprovedQueryAnalyzer:
         return {
             'on_time_rate': round(on_time_rate, 1),
             'on_time_count': int(on_time_count),
-            'total_delivered': int(len(delivered)),
-            'delayed_count': int(len(late)),
+            'total_arrived': int(len(arrived)),
+            'late_count': int(len(late)),
             'late_days_avg': round(late_days_avg, 1),
             'status_breakdown': {
-                'delivered': int(len(self.df[self.df['status'] == 'DELIVERED'])),
-                'delayed': int(len(self.df[self.df['status'] == 'DELAYED'])),
+                'arrived': int(len(self.df[self.df['status'] == 'ARRIVED'])),
                 'in_transit': int(len(self.df[self.df['status'] == 'IN_TRANSIT']))
             }
         }
@@ -106,6 +100,33 @@ class ImprovedQueryAnalyzer:
             'unique_destination_locations': int(destinations),
             'unique_routes': int(len(unique_routes)),
             'total_route_combinations_possible': sources * destinations,
+        }
+    
+    def get_all_destination_metrics(self) -> Dict[str, Any]:
+        """Get shipment counts and metrics for ALL destination locations"""
+        dest_breakdown = self.df.groupby('destination_location').agg({
+            'shipment_id': 'count',
+            'quantity': 'sum'
+        }).reset_index()
+        dest_breakdown.columns = ['location', 'shipment_count', 'total_units']
+        dest_breakdown = dest_breakdown.sort_values('shipment_count', ascending=False)
+        
+        # Add on-time rate for each location
+        metrics = []
+        for _, row in dest_breakdown.iterrows():
+            loc = row['location']
+            loc_data = self.get_shipments_by_location(loc, is_source=False)
+            metrics.append({
+                'location': loc,
+                'shipment_count': int(row['shipment_count']),
+                'total_units': int(row['total_units']),
+                'on_time_rate': loc_data.get('on_time_rate', 0),
+                'status_breakdown': loc_data.get('status_breakdown', {})
+            })
+        
+        return {
+            'total_destination_locations': len(metrics),
+            'destinations': metrics
         }
     
     def get_shipment_details(self, shipment_id: str) -> Dict[str, Any]:
@@ -160,11 +181,11 @@ class ImprovedQueryAnalyzer:
         # Status breakdown
         status_counts = filtered['status'].value_counts().to_dict()
         
-        # On-time rate for delivered
-        delivered = filtered[filtered['status'] == 'DELIVERED']
-        if len(delivered) > 0:
-            on_time = (delivered['arrived_at'] <= delivered['expected_arrival']).sum()
-            on_time_rate = round(on_time / len(delivered) * 100, 1)
+        # On-time rate for arrived shipments
+        arrived = filtered[filtered['status'] == 'ARRIVED']
+        if len(arrived) > 0:
+            on_time = (arrived['arrived_at'] <= arrived['expected_arrival']).sum()
+            on_time_rate = round(on_time / len(arrived) * 100, 1)
         else:
             on_time_rate = 0.0
         
@@ -184,10 +205,10 @@ class ImprovedQueryAnalyzer:
         routes = self.df.groupby(['source_location', 'destination_location']).agg({
             'shipment_id': 'count',
             'quantity': 'sum',
-            'status': lambda x: (x == 'DELIVERED').sum()
+            'status': lambda x: (x == 'ARRIVED').sum()
         }).reset_index()
         
-        routes.columns = ['source', 'destination', 'shipment_count', 'total_units', 'delivered_count']
+        routes.columns = ['source', 'destination', 'shipment_count', 'total_units', 'arrived_count']
         
         # Filter by source/dest if provided
         if source:
@@ -212,20 +233,20 @@ class ImprovedQueryAnalyzer:
     
     def get_risk_shipments(self, limit: int = 10) -> Dict[str, Any]:
         """Identify high-risk shipments"""
-        risk_df = self.df[self.df['status'] == 'Delayed'].copy()
+        risk_df = self.df[self.df['status'] == 'IN_TRANSIT'].copy()
+        risk_df['days_overdue'] = (pd.Timestamp.now() - risk_df['expected_arrival']).dt.days
+        risk_df = risk_df[risk_df['days_overdue'] > 0]
         
         if len(risk_df) == 0:
             return {'risk_shipments': [], 'critical_count': 0}
         
-        # Calculate days overdue
-        risk_df['days_overdue'] = (pd.Timestamp.now() - risk_df['expected_arrival']).dt.days
         risk_df = risk_df.sort_values('days_overdue', ascending=False).head(limit)
         
         critical = len(risk_df[risk_df['days_overdue'] >= 5])
         
         return {
             'critical_shipments': critical,
-            'total_delayed': int(len(self.df[self.df['status'] == 'Delayed'])),
+            'total_at_risk': int(len(self.df[self.df['status'] == 'IN_TRANSIT'])),
             'risk_list': risk_df[['shipment_id', 'sku', 'quantity', 'source_location', 'destination_location', 'days_overdue']].to_dict('records'),
             'sample_risks': risk_df.head(3)[['shipment_id', 'source_location', 'destination_location']].to_dict('records')
         }
@@ -234,7 +255,7 @@ class ImprovedQueryAnalyzer:
     
     def _calculate_risk(self, shipment: pd.Series) -> str:
         """Determine risk level"""
-        if shipment['status'] == 'Delivered':
+        if shipment['status'] == 'ARRIVED':
             if pd.notna(shipment['arrived_at']):
                 delay = (shipment['arrived_at'] - shipment['expected_arrival']).days
                 if delay > 10:
@@ -243,25 +264,29 @@ class ImprovedQueryAnalyzer:
                     return 'MEDIUM'
                 else:
                     return 'LOW'
-        elif shipment['status'] == 'Delayed':
-            return 'HIGH'
+        elif shipment['status'] == 'IN_TRANSIT':
+            days_overdue = (pd.Timestamp.now() - shipment['expected_arrival']).days
+            if days_overdue >= 5:
+                return 'HIGH'
+            elif days_overdue >= 2:
+                return 'MEDIUM'
         return 'LOW'
     
     def _calculate_route_on_time(self, source: str, destination: str) -> float:
         """Calculate on-time rate for specific route"""
         route = self.df[(self.df['source_location'] == source) & (self.df['destination_location'] == destination)]
-        delivered = route[route['status'] == 'Delivered']
+        arrived = route[route['status'] == 'ARRIVED']
         
-        if len(delivered) == 0:
+        if len(arrived) == 0:
             return 0.0
         
-        on_time = (delivered['arrived_at'] <= delivered['expected_arrival']).sum()
-        return round(on_time / len(delivered) * 100, 1)
+        on_time = (arrived['arrived_at'] <= arrived['expected_arrival']).sum()
+        return round(on_time / len(arrived) * 100, 1)
     
     def _format_shipment_card(self, shp: pd.Series) -> str:
         """Format shipment as readable card"""
         risk = self._calculate_risk(shp)
-        risk_emoji = '🔴' if risk == 'HIGH' else '🟡' if risk == 'MEDIUM' else '🟢'
+        risk_icon = '[HIGH]' if risk == 'HIGH' else '[MED]' if risk == 'MEDIUM' else '[LOW]'
         
         if pd.notna(shp['arrived_at']):
             delay = (shp['arrived_at'] - shp['expected_arrival']).days
@@ -270,7 +295,7 @@ class ImprovedQueryAnalyzer:
             status_str = shp['status']
         
         return (
-            f"{risk_emoji} {shp['shipment_id']} | {shp['sku']} ({int(shp['quantity'])} units) | "
+            f"{risk_icon} {shp['shipment_id']} | {shp['sku']} ({int(shp['quantity'])} units) | "
             f"{shp['source_location']}→{shp['destination_location']} | {status_str}"
         )
 

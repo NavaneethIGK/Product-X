@@ -215,12 +215,19 @@ class ConfigManager:
     
     def load_config(self):
         """Load API keys and provider preference from config.json (Priority 1) or environment (Priority 2)"""
-        # Priority 1: config.json file
-        config_file = os.path.join(os.path.dirname(__file__), 'config.json')
+        # Priority 1: config.json file - check root first, then backend
+        backend_dir = os.path.dirname(__file__)
+        root_dir = os.path.dirname(backend_dir)
+        
+        config_file = os.path.join(root_dir, 'config.json')  # Root directory first
+        if not os.path.exists(config_file):
+            config_file = os.path.join(backend_dir, 'config.json')  # Fallback to backend dir
+        
         if os.path.exists(config_file):
             try:
                 with open(config_file, 'r') as f:
                     config = json.load(f)
+                    print(f"Loading config from: {config_file}")
                     
                     # New config format
                     if 'ai_provider' in config:
@@ -232,17 +239,17 @@ class ConfigManager:
                         openai_config = config.get('openai', {})
                         if openai_config.get('enabled') and openai_config.get('api_key'):
                             self.openai_api_key = openai_config['api_key']
-                            print("✅ OpenAI API Key loaded from config.json")
+                            print("OpenAI API Key loaded from config.json")
                         
                         # Load Groq config
                         groq_config = config.get('groq', {})
                         if groq_config.get('enabled') and groq_config.get('api_key'):
                             self.grok_api_key = groq_config['api_key']
-                            print("✅ Groq API Key loaded from config.json")
+                            print(f"Groq API Key loaded from config.json (length: {len(groq_config['api_key'])})")
                         
                         # Set provider (default to groq)
                         self.use_grok = provider == 'groq'
-                        print(f"✅ AI Provider set to: {'🦅 GROQ' if self.use_grok else '🤖 OPENAI'} (from config.json)")
+                        print(f"AI Provider set to: {('GROQ' if self.use_grok else 'OPENAI')} (from config.json)")
                     else:
                         # Legacy config format for backward compatibility
                         if config.get('openai_api_key'):
@@ -806,14 +813,15 @@ async def chat(request: ChatRequest):
         
         # Get or create conversation session
         session = get_or_create_session(request.session_id)
-        print(f"📌 Session: {session.session_id}")
+        print(f"[Session] {session.session_id}")
         
-        # Generate accurate response using improved analyzer
-        response_generator = ImprovedResponseGenerator(df)
-        response_text, metadata = response_generator.generate_response(user_query)
+        # Use ONLY Groq LLM for all queries
+        from groq_query_handler import GroqPoweredQueryHandler
         
-        print(f"✅ Response generated: {metadata['query_type']}")
-        print(f"   Confidence: {metadata['confidence']:.0%}")
+        groq_handler = GroqPoweredQueryHandler(df, config_manager.grok_api_key)
+        response_text, llm_metadata = groq_handler.handle_query(user_query)
+        
+        print(f"Response generated via Groq LLM")
         
         # Store in session
         session.add_message("user", user_query)
@@ -823,10 +831,10 @@ async def chat(request: ChatRequest):
             "response": response_text,
             "session_id": session.session_id,
             "message_count": len(session.messages),
-            "query_type": metadata['query_type'],
-            "confidence": metadata['confidence'],
+            "llm_model": "groq/llama-3.3-70b-versatile",
+            "method": llm_metadata.get('method', 'groq_powered'),
             "ai_powered": True,
-            "data_source": "CSV (accurate)",
+            "data_source": "Groq LLM + CSV Analytics",
             "timestamp": datetime.now().isoformat()
         }
     

@@ -47,9 +47,9 @@ def create_default_user():
             ("admin@productx.com", password_hash)
         )
         conn.commit()
-        print("✅ Default user created: admin@productx.com / admin123")
+        print("[OK] Default user created: admin@productx.com / admin123")
     else:
-        print("✅ Default user already exists")
+        print("[OK] Default user already exists")
     
     conn.close()
 
