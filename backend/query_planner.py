@@ -24,7 +24,7 @@ class QueryPlanner:
         'arrived_at'
     }
     
-    VALID_OPERATIONS = ['COUNT', 'LIST', 'FILTER', 'AGGREGATE_SUM', 'DETAILS']
+    VALID_OPERATIONS = ['COUNT', 'LIST', 'FILTER', 'AGGREGATE_SUM', 'DETAILS', 'METRICS', 'UNIQUE_COUNT', 'ANALYTICS']
     
     VALID_STATUSES = ['ARRIVED', 'IN_TRANSIT', 'DELIVERED', 'DELAYED']
     
@@ -45,8 +45,16 @@ class QueryPlanner:
         # Extract location references
         locations = self._extract_locations(question_lower)
         
-        # Extract status references
-        status = self._extract_status(question_lower)
+        # Check if user mentioned a location but it's invalid
+        # If they asked about "to" or "from" but location is None, mark as invalid
+        invalid_location_mentioned = False
+        if any(keyword in question_lower for keyword in ['to ', 'from ']) and locations.get('destination') is None and locations.get('source') is None:
+            # Check if they actually mentioned a location code/name
+            if re.search(r'to\s+([a-z0-9\-]+)', question_lower, re.IGNORECASE) or re.search(r'from\s+([a-z0-9\-]+)', question_lower, re.IGNORECASE):
+                invalid_location_mentioned = True
+        
+        # Extract status references (but NOT for METRICS and DETAILS operations)
+        status = self._extract_status(question_lower) if operation not in ['METRICS', 'DETAILS'] else None
         
         # Extract SKU references
         sku = self._extract_sku(question_lower)
@@ -65,7 +73,8 @@ class QueryPlanner:
             "parameters": {
                 "limit": self._extract_limit(question_lower),
                 "sort_by": self._extract_sort_field(question_lower)
-            }
+            },
+            "invalid_location_mentioned": invalid_location_mentioned
         }
         
         # Remove null filters to keep JSON clean
@@ -81,10 +90,23 @@ class QueryPlanner:
     def _detect_operation(self, text: str) -> str:
         """Detect the operation type from question"""
         
-        # DETAILS operation - asking for specific shipment info
-        if any(word in text for word in ['detail', 'info', 'information', 'what is', 'tell me']):
-            if 'shp-' in text:
-                return 'DETAILS'
+        # ANALYTICS operation - asking for insights/analysis (routes with delays, problematic SKUs, etc.)
+        if any(word in text for word in ['problematic', 'most delays', 'worst', 'best', 'top', 'bottom', 'analysis', 'insights', 'trending', 'critical']):
+            return 'ANALYTICS'
+        
+        # DETAILS operation - asking for specific shipment info (has SHP-XXXXXXX)
+        if 'shp-' in text:
+            return 'DETAILS'
+        
+        # UNIQUE_COUNT operation - asking for distinct/unique counts
+        if any(word in text for word in ['unique', 'distinct', 'different', 'how many sku', 'how many routes', 'count of unique']):
+            return 'UNIQUE_COUNT'
+        
+        # METRICS operation - asking for rates (on-time rate, delay rate, performance, etc.)
+        if any(word in text for word in ['rate', 'percentage', '%', 'performance', 'metric', 'on-time', 'on time', 'ontime']):
+            # Make sure it's asking for rate/metric, not a filter
+            if any(word in text for word in ['rate', 'percentage', '%', 'performance', 'metric']):
+                return 'METRICS'
         
         # AGGREGATE_SUM operation - asking for sum/total/volume (BEFORE COUNT check)
         if any(word in text for word in ['sum', 'total units', 'volume', 'quantity total', 'total quantity']):
@@ -230,6 +252,18 @@ class QueryPlanner:
         
         if operation == 'DETAILS':
             # Return all fields for detailed view
+            return list(self.VALID_FIELDS)
+        
+        if operation == 'ANALYTICS':
+            # Need all fields for analysis
+            return list(self.VALID_FIELDS)
+        
+        if operation == 'METRICS':
+            # Need status and arrival dates for metrics
+            return ['shipment_id', 'status', 'expected_arrival', 'arrived_at']
+        
+        if operation == 'UNIQUE_COUNT':
+            # Return all fields to count unique values
             return list(self.VALID_FIELDS)
         
         if operation == 'COUNT':

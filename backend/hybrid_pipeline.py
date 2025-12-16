@@ -40,11 +40,22 @@ class HybridQueryPipeline:
         print(f"  Operation: {query_plan['operation']}")
         print(f"  Filters: {query_plan['filters']}")
         
+        # Check if user mentioned an invalid location
+        if query_plan.get('invalid_location_mentioned'):
+            return {
+                'response': 'No data found.',
+                'operation': query_plan['operation'],
+                'records': 0,
+                'validated': True,
+                'method': 'hybrid_pipeline'
+            }
+        
         print(f"\nStep 2: Execute Query (Python/Pandas)")
         
         # STEP 2: Execute query using Python/Pandas on actual data
         result_data = self._execute_query_plan(query_plan)
-        print(f"  Results: {len(result_data.get('records', []))} records found")
+        actual_count = result_data.get('count', 0)
+        print(f"  Results: {actual_count:,} records found")
         
         print(f"\nStep 3: Validate Results")
         
@@ -134,8 +145,93 @@ class HybridQueryPipeline:
                 'records': []
             }
         
-        else:
-            return {'count': 0, 'error': f'Unknown operation: {operation}'}
+        elif operation == 'ANALYTICS':
+            # Perform analytics on the dataset
+            
+            # Top SKUs by on-time rate (low = problematic)
+            sku_stats = []
+            for sku in result_df['sku'].unique()[:5]:  # Top 5
+                sku_df = result_df[result_df['sku'] == sku]
+                arrived = len(sku_df[sku_df['status'] == 'ARRIVED'])
+                if arrived > 0:
+                    on_time = len(sku_df[(sku_df['status'] == 'ARRIVED') & 
+                                        (sku_df['arrived_at'] <= sku_df['expected_arrival'])])
+                    on_time_rate = (on_time / arrived * 100)
+                    sku_stats.append({
+                        'sku': sku,
+                        'on_time_rate': round(on_time_rate, 2),
+                        'total_shipments': len(sku_df)
+                    })
+            
+            # Top routes by delay count
+            route_stats = []
+            result_df['route'] = result_df['source_location'] + ' to ' + result_df['destination_location']
+            for route in result_df['route'].unique()[:5]:  # Top 5
+                route_df = result_df[result_df['route'] == route]
+                arrived = len(route_df[route_df['status'] == 'ARRIVED'])
+                if arrived > 0:
+                    delayed = len(route_df[(route_df['status'] == 'ARRIVED') & 
+                                          (route_df['arrived_at'] > route_df['expected_arrival'])])
+                    delay_rate = (delayed / arrived * 100)
+                    route_stats.append({
+                        'route': route,
+                        'delay_rate': round(delay_rate, 2),
+                        'delayed_count': delayed,
+                        'total_arrived': arrived
+                    })
+            
+            return {
+                'count': len(result_df),
+                'operation': 'ANALYTICS',
+                'sku_stats': sku_stats,
+                'route_stats': route_stats,
+                'total_records': len(result_df),
+                'records': []
+            }
+        
+        elif operation == 'METRICS':
+            # Calculate metrics on the filtered dataset
+            total_shipments = len(result_df)
+            arrived_shipments = len(result_df[result_df['status'] == 'ARRIVED'])
+            in_transit = len(result_df[result_df['status'] == 'IN_TRANSIT'])
+            
+            # On-time rate: shipments that arrived on time
+            on_time = len(result_df[(result_df['status'] == 'ARRIVED') & 
+                                   (result_df['arrived_at'] <= result_df['expected_arrival'])])
+            on_time_rate = (on_time / arrived_shipments * 100) if arrived_shipments > 0 else 0
+            
+            # Delay rate: shipments that arrived late
+            delayed = len(result_df[(result_df['status'] == 'ARRIVED') & 
+                                   (result_df['arrived_at'] > result_df['expected_arrival'])])
+            delay_rate = (delayed / arrived_shipments * 100) if arrived_shipments > 0 else 0
+            
+            return {
+                'count': total_shipments,
+                'operation': 'METRICS',
+                'total_shipments': total_shipments,
+                'arrived_shipments': arrived_shipments,
+                'in_transit_shipments': in_transit,
+                'on_time_shipments': on_time,
+                'delayed_shipments': delayed,
+                'on_time_rate': round(on_time_rate, 2),
+                'delay_rate': round(delay_rate, 2),
+                'records': []
+            }
+        
+        elif operation == 'UNIQUE_COUNT':
+            # Count unique values for SKU, routes, etc.
+            unique_skus = len(result_df['sku'].unique())
+            unique_routes = len(result_df.groupby(['source_location', 'destination_location']))
+            
+            return {
+                'count': len(result_df),
+                'operation': 'UNIQUE_COUNT',
+                'unique_skus': unique_skus,
+                'unique_routes': unique_routes,
+                'total_records': len(result_df),
+                'records': []
+            }
+        
     
     def _validate_results(self, query_plan: Dict, result_data: Dict) -> Dict[str, Any]:
         """Validate results are correct - NO GUESSING"""
@@ -193,8 +289,21 @@ class HybridQueryPipeline:
             if count == 0:
                 return "No data found."
             shp = result_data['records'][0]
-            return (f"Shipment {shp.get('shipment_id')}: {shp.get('sku')} ({shp.get('quantity')} units), "
-                    f"Status: {shp.get('status')}, From {shp.get('source_location')} to {shp.get('destination_location')}")
+            status = shp.get('status', 'N/A')
+            departed = shp.get('departed_at', 'N/A')
+            expected_arrival = shp.get('expected_arrival', 'N/A')
+            arrived = shp.get('arrived_at', 'N/A')
+            
+            # For in-transit, don't show arrived date
+            if status == 'IN_TRANSIT':
+                return (f"Shipment {shp.get('shipment_id')}: {shp.get('sku')} ({shp.get('quantity')} units), "
+                        f"Status: {status}, From {shp.get('source_location')} to {shp.get('destination_location')}, "
+                        f"Departed: {departed}, Expected arrival: {expected_arrival}.")
+            else:
+                return (f"Shipment {shp.get('shipment_id')}: {shp.get('sku')} ({shp.get('quantity')} units), "
+                        f"Status: {status}, From {shp.get('source_location')} to {shp.get('destination_location')}, "
+                        f"Departed: {departed}, Expected: {expected_arrival}, Arrived: {arrived}.")
+        
         
         elif operation == 'LIST':
             if count == 0:
@@ -207,6 +316,49 @@ class HybridQueryPipeline:
             if total_shipments == 0:
                 return "No data found."
             return f"Total units: {total_units:,} across {total_shipments:,} shipments."
+        
+        elif operation == 'METRICS':
+            if count == 0:
+                return "No data found."
+            
+            location = filters.get('destination_location') or filters.get('source_location')
+            location_text = f" to {location}" if location else ""
+            
+            on_time_rate = result_data.get('on_time_rate', 0)
+            delay_rate = result_data.get('delay_rate', 0)
+            total_shipments = result_data.get('total_shipments', 0)
+            
+            return f"Shipment metrics{location_text}: On-time rate: {on_time_rate}%, Delay rate: {delay_rate}%, Total shipments: {total_shipments:,}."
+        
+        elif operation == 'UNIQUE_COUNT':
+            if count == 0:
+                return "No data found."
+            
+            unique_skus = result_data.get('unique_skus', 0)
+            unique_routes = result_data.get('unique_routes', 0)
+            
+            return f"Dataset contains {unique_skus} unique SKUs and {unique_routes} unique delivery routes."
+        
+        elif operation == 'ANALYTICS':
+            if count == 0:
+                return "No data found."
+            
+            sku_stats = result_data.get('sku_stats', [])
+            route_stats = result_data.get('route_stats', [])
+            
+            response = "Analysis Results:\n"
+            
+            if sku_stats:
+                response += "Problematic SKUs (lowest on-time rates):\n"
+                for stat in sorted(sku_stats, key=lambda x: x['on_time_rate']):
+                    response += f"- {stat['sku']}: {stat['on_time_rate']}% on-time ({stat['total_shipments']} shipments)\n"
+            
+            if route_stats:
+                response += "\nRoutes with Most Delays:\n"
+                for stat in sorted(route_stats, key=lambda x: x['delay_rate'], reverse=True):
+                    response += f"- {stat['route']}: {stat['delay_rate']}% delay rate ({stat['delayed_count']} delayed out of {stat['total_arrived']})\n"
+            
+            return response.strip()
         
         else:
             return "No data found."

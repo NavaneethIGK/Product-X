@@ -15,6 +15,7 @@ from ai_providers_groq import call_groq_api
 from smart_query_engine import smart_parse_intent, execute_smart_query, format_for_response
 from auth_db import verify_password, get_user, init_db, create_default_user
 from improved_response_generator import ImprovedResponseGenerator
+from query_logger import QueryLogger
 
 # Session management for conversation history
 class ConversationSession:
@@ -145,6 +146,9 @@ def get_or_create_session(session_id: Optional[str] = None) -> ConversationSessi
     return sessions[session_id]
 
 app = FastAPI(title="Supply Chain AI Copilot", version="1.0.0")
+
+# Initialize query logger
+query_logger = QueryLogger(logs_dir="logs")
 
 # Enable CORS
 app.add_middleware(
@@ -959,14 +963,40 @@ async def chat(request: ChatRequest):
         session = get_or_create_session(request.session_id)
         print(f"[Session] {session.session_id}")
         
-        # Use Hybrid Pipeline: LLM (Intent) → Python (Data) → Validation → LLM (Language)
-        from hybrid_pipeline import HybridQueryPipeline
+        # Use 3-Layer Query System: Parser → Executor → Analyzer
+        from query_parser import QueryParser
+        from query_executor import QueryExecutor
+        from query_analyzer import QueryAnalyzer
         
-        pipeline = HybridQueryPipeline(df, config_manager.grok_api_key)
-        result = pipeline.execute(user_query)
-        response_text = result['response']
+        parser = QueryParser()
+        executor = QueryExecutor(df)
+        analyzer = QueryAnalyzer()
         
-        print(f"[Pipeline Result] Operation: {result['operation']}, Records: {result['records']}")
+        # Parse user question to JSON instruction
+        instruction = parser.parse(user_query)
+        print(f"[Parser] Intent: {instruction['intent']}, Filters: {instruction['filters']}")
+        
+        # Execute instruction against CSV data
+        execution_result = executor.execute(instruction)
+        print(f"[Executor] Records: {execution_result['record_count']}")
+        
+        # Analyze and format result as human-readable text
+        response_text = analyzer.analyze(execution_result)
+        print(f"[Analyzer] Response: {response_text[:100]}...")
+        
+        # Log the query and response
+        query_logger.log_query(
+            user_query=user_query,
+            response=response_text,
+            operation=execution_result.get('intent', 'UNKNOWN'),
+            records_count=execution_result.get('record_count', 0),
+            additional_data={
+                'session_id': session.session_id,
+                'method': '3_layer_system',
+                'filters': instruction.get('filters', {}),
+                'group_by': instruction.get('group_by', [])
+            }
+        )
         
         # Store in session
         session.add_message("user", user_query)
@@ -1311,6 +1341,78 @@ async def chat(request: ChatRequest):
             "sources": [],
             "timestamp": datetime.now().isoformat()
         }
+
+# ============================================================================
+# LOGGING ENDPOINTS
+# ============================================================================
+
+@app.get("/logs/today")
+async def get_today_logs():
+    """Get all logs for today"""
+    try:
+        logs = query_logger.get_today_logs()
+        return {
+            "date": datetime.now().strftime("%Y-%m-%d"),
+            "total_queries": len(logs),
+            "logs": logs,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error reading logs: {str(e)}")
+
+@app.get("/logs/by-date/{date}")
+async def get_logs_by_date(date: str):
+    """Get all logs for a specific date (format: YYYY-MM-DD)"""
+    try:
+        logs = query_logger.get_logs_by_date(date)
+        return {
+            "date": date,
+            "total_queries": len(logs),
+            "logs": logs,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error reading logs: {str(e)}")
+
+@app.get("/logs/all")
+async def get_all_logs():
+    """Get all logs organized by date"""
+    try:
+        all_logs = query_logger.get_all_logs()
+        total_queries = sum(len(logs) for logs in all_logs.values())
+        return {
+            "total_dates": len(all_logs),
+            "total_queries": total_queries,
+            "dates": list(all_logs.keys()),
+            "logs_by_date": all_logs,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error reading logs: {str(e)}")
+
+@app.get("/logs/summary")
+async def get_logs_summary():
+    """Get summary of all logs"""
+    try:
+        all_logs = query_logger.get_all_logs()
+        total_queries = sum(len(logs) for logs in all_logs.values())
+        
+        # Get operation counts
+        operation_counts = {}
+        for logs in all_logs.values():
+            for log in logs:
+                op = log.get('operation', 'UNKNOWN')
+                operation_counts[op] = operation_counts.get(op, 0) + 1
+        
+        return {
+            "total_dates": len(all_logs),
+            "total_queries": total_queries,
+            "operation_breakdown": operation_counts,
+            "dates_with_logs": sorted(list(all_logs.keys())),
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error reading logs: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
