@@ -773,6 +773,150 @@ def format_response(ai_insights: str, query_result: QueryResult) -> str:
     # Just return the AI insights - no extra sections
     return ai_insights
 
+
+# Query Execution Functions
+
+def execute_count_operation(df, filters: dict) -> dict:
+    """Execute COUNT operation on DataFrame"""
+    result_df = df.copy()
+    
+    # Apply filters
+    if 'destination_location' in filters and filters['destination_location']:
+        result_df = result_df[result_df['destination_location'] == filters['destination_location']]
+    if 'source_location' in filters and filters['source_location']:
+        result_df = result_df[result_df['source_location'] == filters['source_location']]
+    if 'status' in filters and filters['status']:
+        result_df = result_df[result_df['status'] == filters['status']]
+    if 'sku' in filters and filters['sku']:
+        result_df = result_df[result_df['sku'] == filters['sku']]
+    
+    return {'count': len(result_df), 'records': result_df.head(10).to_dict('records')}
+
+
+def execute_list_operation(df, filters: dict, fields: list) -> dict:
+    """Execute LIST operation on DataFrame"""
+    result_df = df.copy()
+    
+    # Apply filters
+    if 'destination_location' in filters and filters['destination_location']:
+        result_df = result_df[result_df['destination_location'] == filters['destination_location']]
+    if 'source_location' in filters and filters['source_location']:
+        result_df = result_df[result_df['source_location'] == filters['source_location']]
+    if 'shipment_id' in filters and filters['shipment_id']:
+        result_df = result_df[result_df['shipment_id'] == filters['shipment_id']]
+    if 'status' in filters and filters['status']:
+        result_df = result_df[result_df['status'] == filters['status']]
+    
+    # Select fields if specified
+    if fields:
+        fields = [f for f in fields if f in result_df.columns]
+        result_df = result_df[fields] if fields else result_df
+    
+    return {'count': len(result_df), 'records': result_df.head(20).to_dict('records')}
+
+
+def execute_filter_operation(df, filters: dict, fields: list) -> dict:
+    """Execute FILTER operation on DataFrame"""
+    return execute_list_operation(df, filters, fields)
+
+
+def execute_aggregate_operation(df, filters: dict) -> dict:
+    """Execute AGGREGATE_SUM operation on DataFrame"""
+    result_df = df.copy()
+    
+    # Apply filters
+    if 'destination_location' in filters and filters['destination_location']:
+        result_df = result_df[result_df['destination_location'] == filters['destination_location']]
+    if 'source_location' in filters and filters['source_location']:
+        result_df = result_df[result_df['source_location'] == filters['source_location']]
+    
+    total_quantity = result_df['quantity'].sum()
+    total_shipments = len(result_df)
+    
+    return {'total_units': total_quantity, 'total_shipments': total_shipments}
+
+
+def execute_details_operation(analyzer, filters: dict) -> dict:
+    """Execute DETAILS operation"""
+    if 'shipment_id' in filters and filters['shipment_id']:
+        return analyzer.get_shipment_details(filters['shipment_id'])
+    return {'error': 'No shipment ID provided for details operation'}
+
+
+def format_query_result(user_query: str, operation: str, result_data: dict) -> str:
+    """Format query result as human-readable response - Data-only, no guessing"""
+    
+    if 'error' in result_data:
+        return result_data['error']
+    
+    if operation == 'COUNT':
+        count = result_data.get('count', 0)
+        
+        # If no results found
+        if count == 0:
+            return "No data found."
+        
+        # Extract what was counted from the query
+        if 'to' in user_query.lower():
+            location = extract_location_from_query(user_query)
+            return f"There are {count:,} shipments to {location}."
+        elif 'from' in user_query.lower():
+            location = extract_location_from_query(user_query)
+            return f"There are {count:,} shipments from {location}."
+        else:
+            return f"Total count: {count:,} records."
+    
+    elif operation == 'DETAILS':
+        if result_data.get('error') or 'shipment_id' not in result_data:
+            return "No data found."
+        shp = result_data
+        return (f"Shipment {shp.get('shipment_id')}: {shp.get('sku')} ({shp.get('quantity')} units), "
+                f"Status: {shp.get('status')}, From {shp.get('source')} to {shp.get('destination')}")
+    
+    elif operation == 'LIST':
+        count = result_data.get('count', 0)
+        records = result_data.get('records', [])
+        
+        if count == 0:
+            return "No data found."
+        
+        # Format first few records
+        response = f"Found {count:,} records."
+        return response
+    
+    elif operation == 'AGGREGATE_SUM':
+        total_units = result_data.get('total_units', 0)
+        total_shipments = result_data.get('total_shipments', 0)
+        
+        if total_shipments == 0:
+            return "No data found."
+        
+        return f"Total units: {total_units:,} across {total_shipments:,} shipments."
+    
+    else:
+        return "No data found."
+
+
+def extract_location_from_query(query: str) -> str:
+    """Extract location code from query"""
+    locations_map = {
+        'in-del': 'IN-DEL', 'del': 'IN-DEL', 'delhi': 'IN-DEL',
+        'in-mum': 'IN-MUM', 'mum': 'IN-MUM', 'mumbai': 'IN-MUM',
+        'uk-lon': 'UK-LON', 'lon': 'UK-LON', 'london': 'UK-LON',
+        'us-lax': 'US-LAX', 'lax': 'US-LAX', 'los angeles': 'US-LAX',
+        'cn-shz': 'CN-SHZ', 'shz': 'CN-SHZ', 'shenzhen': 'CN-SHZ',
+        'de-fra': 'DE-FRA', 'fra': 'DE-FRA', 'frankfurt': 'DE-FRA',
+        'th-bkk': 'TH-BKK', 'bkk': 'TH-BKK', 'bangkok': 'TH-BKK',
+        'sg-sin': 'SG-SIN', 'sin': 'SG-SIN', 'singapore': 'SG-SIN'
+    }
+    
+    query_lower = query.lower()
+    for key, value in locations_map.items():
+        if key in query_lower:
+            return value
+    
+    return "Unknown Location"
+
 @app.post("/chat")
 async def chat(request: ChatRequest):
     """
@@ -798,14 +942,14 @@ async def chat(request: ChatRequest):
     user_query = request.query
     
     try:
-        print(f"\n🎯 IMPROVED SUPPLY CHAIN QUERY")
-        print(f"📥 Query: {user_query}")
+        print(f"\n[SUPPLY CHAIN QUERY]")
+        print(f"User Query: {user_query}")
         
         # Load CSV data
         df = load_csv()
         if df.empty:
             return {
-                "response": "⚠️ Supply chain data not available",
+                "response": "Supply chain data not available",
                 "session_id": request.session_id or "error",
                 "error": "No data",
                 "timestamp": datetime.now().isoformat()
@@ -815,13 +959,14 @@ async def chat(request: ChatRequest):
         session = get_or_create_session(request.session_id)
         print(f"[Session] {session.session_id}")
         
-        # Use ONLY Groq LLM for all queries
-        from groq_query_handler import GroqPoweredQueryHandler
+        # Use Hybrid Pipeline: LLM (Intent) → Python (Data) → Validation → LLM (Language)
+        from hybrid_pipeline import HybridQueryPipeline
         
-        groq_handler = GroqPoweredQueryHandler(df, config_manager.grok_api_key)
-        response_text, llm_metadata = groq_handler.handle_query(user_query)
+        pipeline = HybridQueryPipeline(df, config_manager.grok_api_key)
+        result = pipeline.execute(user_query)
+        response_text = result['response']
         
-        print(f"Response generated via Groq LLM")
+        print(f"[Pipeline Result] Operation: {result['operation']}, Records: {result['records']}")
         
         # Store in session
         session.add_message("user", user_query)
@@ -831,10 +976,8 @@ async def chat(request: ChatRequest):
             "response": response_text,
             "session_id": session.session_id,
             "message_count": len(session.messages),
-            "llm_model": "groq/llama-3.3-70b-versatile",
-            "method": llm_metadata.get('method', 'groq_powered'),
-            "ai_powered": True,
-            "data_source": "Groq LLM + CSV Analytics",
+            "method": "hybrid_pipeline",
+            "data_source": "CSV Database",
             "timestamp": datetime.now().isoformat()
         }
     
